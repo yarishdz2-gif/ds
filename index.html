@@ -8,7 +8,7 @@
         :root {
             --bg-base: #050505;
             --bg-panel: #111111;
-            --accent: #ff0055; /* Cambiado a rojo agresivo/hacker */
+            --accent: #ff0055; 
             --accent-glow: rgba(255, 0, 85, 0.4);
             --text-main: #f8fafc;
             --text-muted: #475569;
@@ -52,30 +52,26 @@
         </div>
 
         <div class="editor-container">
-            <div class="editor-header"><span>qyrex_obfuscated.lua</span><span>0% Números</span></div>
+            <div class="editor-header"><span>qyrex_obfuscated.lua</span><span>0% Números + Anti-Skidder</span></div>
             <textarea id="outputCode" spellcheck="false" readonly placeholder="-- El infierno de símbolos aparecerá aquí..."></textarea>
         </div>
     </div>
 
     <script>
-        // Generador de ID polimórfico (lIllIIll)
         function genLuraphID(len = Math.floor(Math.random() * 8) + 6) {
             let res = '';
             for(let i=0; i<len; i++) res += Math.random() > 0.5 ? 'l' : 'I';
             return res;
         }
 
-        // MOTOR MAGICO: Convierte cualquier número en símbolos !#$%&/()
         function obfNum(num) {
             const syms = "!#$%&/()=?¡@+*~_-,;><°|"; 
             const genStr = (l) => Array.from({length: l}, () => syms[Math.floor(Math.random() * syms.length)]).join('');
             
             if (num === 0) return `#""`;
             
-            // Si el número es pequeño, hacemos una cadena de esa longitud
             if (num <= 15) return `#"${genStr(num)}"`;
             
-            // Si el número es grande, usamos matemáticas: (A * A) + B para no hacer cadenas gigantes
             const factor = Math.floor(Math.sqrt(num));
             const remainder = num - (factor * factor);
             
@@ -86,10 +82,9 @@
             return expr;
         }
 
-        // Generador de código basura con símbolos
         function genJunkMath() {
             const v = genLuraphID(6);
-            return `local ${v} = ${obfNum(Math.floor(Math.random() * 300))}; if ${v} == ${obfNum(0)} then return end;`;
+            return `local ${v} = ${obfNum(Math.floor(Math.random() * 300))}; if ${v} == ${obfNum(0)} then error("HAHAHAHHA SKIDDER NOOB") end;`;
         }
 
         function compilarQyrex() {
@@ -105,14 +100,11 @@
             const indexVar = genLuraphID();
             const xorKey = Math.floor(Math.random() * 150) + 50;
 
-            // Cifrado de los bytes originales
             let bytecodeMutado = [];
             for (let i = 0; i < input.length; i++) {
-                // A cada byte del texto lo convertimos en un cálculo de símbolos
                 bytecodeMutado.push(obfNum(input.charCodeAt(i) ^ xorKey));
             }
 
-            // Ensamblaje del Control Flow Flattening (CFF) SIN NÚMEROS
             let cff = `
 local ${memVar} = {${bytecodeMutado.join(',')}}
 local ${keyVar} = ${obfNum(xorKey)}
@@ -122,12 +114,12 @@ local ${stateVar} = ${obfNum(1)}
 while true do
     if ${stateVar} == ${obfNum(3)} then
         local _s, _e = pcall(function() return loadstring(${bufferVar})() end)
-        if not _s then return end
+        if not _s then error("HAHAHAHHA SKIDDER NOOB") end
         break
     elseif ${stateVar} == ${obfNum(1)} then
         ${genJunkMath()}
-        if type(bit32) ~= "table" then while true do end end
-        if type(bit32.bxor) ~= "function" then return end
+        if type(bit32) ~= "table" then error("HAHAHAHHA SKIDDER NOOB") end
+        if type(bit32.bxor) ~= "function" then error("HAHAHAHHA SKIDDER NOOB") end
         ${stateVar} = ${obfNum(4)}
     elseif ${stateVar} == ${obfNum(4)} then
         for ${indexVar} = ${obfNum(1)}, #${memVar} do
@@ -135,7 +127,7 @@ while true do
         end
         ${stateVar} = ${obfNum(2)}
     elseif ${stateVar} == ${obfNum(2)} then
-        if #${bufferVar} ~= ${obfNum(input.length)} then while true do end end
+        if #${bufferVar} ~= ${obfNum(input.length)} then error("HAHAHAHHA SKIDDER NOOB") end
         ${stateVar} = ${obfNum(3)}
     end
 end
@@ -143,13 +135,14 @@ end
             
             let minified = cff.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
             
-            // Bombardeo de variables basura al inicio llenas de símbolos
             let junkHeader = "";
             for(let i=0; i<40; i++) {
                 junkHeader += `local ${genLuraphID()} = ${obfNum(Math.floor(Math.random() * 200))}; `;
             }
 
-            document.getElementById('outputCode').value = junkHeader + minified;
+            const watermark = "-- Protect by QyrexObf [qyrex.hopto.org]\n";
+
+            document.getElementById('outputCode').value = watermark + junkHeader + minified;
             document.getElementById('statusLog').innerText = `Éxito: ${minified.length} caracteres`;
         }
     </script>
