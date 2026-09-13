@@ -3,139 +3,154 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QyrexAPI | LPH-15 Architecture Obfuscator</title>
+    <title>QyrexAPI | LPH-15 Extreme Symbol Obfuscator</title>
     <style>
         :root {
-            --bg-base: #09090b;
-            --bg-panel: #18181b;
-            --accent: #3b82f6;
-            --accent-glow: rgba(59, 130, 246, 0.5);
+            --bg-base: #050505;
+            --bg-panel: #111111;
+            --accent: #ff0055; /* Cambiado a rojo agresivo/hacker */
+            --accent-glow: rgba(255, 0, 85, 0.4);
             --text-main: #f8fafc;
-            --text-muted: #64748b;
+            --text-muted: #475569;
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Consolas', 'Courier New', monospace; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Consolas', monospace; }
         body { background-color: var(--bg-base); color: var(--text-main); display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 2rem; }
-        header { text-align: center; margin-bottom: 2rem; border-bottom: 1px solid #333; padding-bottom: 1rem; width: 100%; max-width: 1400px; }
-        h1 { color: var(--accent); font-size: 2rem; text-shadow: 0 0 15px var(--accent-glow); letter-spacing: 2px; }
-        .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-top: 5px; }
+        header { text-align: center; margin-bottom: 2rem; border-bottom: 1px solid #222; padding-bottom: 1rem; width: 100%; max-width: 1400px; }
+        h1 { color: var(--accent); font-size: 2.2rem; text-shadow: 0 0 20px var(--accent-glow); letter-spacing: 3px; }
+        .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-top: 5px; text-transform: uppercase; }
         
         .workspace { display: flex; gap: 20px; width: 100%; max-width: 1400px; height: 70vh; }
-        .editor-container { flex: 1; display: flex; flex-direction: column; background: var(--bg-panel); border: 1px solid #27272a; border-radius: 8px; overflow: hidden; }
-        .editor-header { background: #0f0f12; padding: 10px 15px; font-size: 0.85rem; color: var(--text-muted); border-bottom: 1px solid #27272a; display: flex; justify-content: space-between; }
+        .editor-container { flex: 1; display: flex; flex-direction: column; background: var(--bg-panel); border: 1px solid #222; border-radius: 8px; overflow: hidden; }
+        .editor-header { background: #0a0a0a; padding: 10px 15px; font-size: 0.85rem; color: var(--text-muted); border-bottom: 1px solid #222; display: flex; justify-content: space-between; }
         
-        textarea { flex: 1; width: 100%; background-color: transparent; color: #a1a1aa; border: none; padding: 15px; font-size: 14px; resize: none; outline: none; }
+        textarea { flex: 1; width: 100%; background-color: transparent; color: #ff3377; border: none; padding: 15px; font-size: 13px; resize: none; outline: none; word-wrap: break-word; }
         textarea:focus { color: #fff; }
         
         .action-panel { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 15px; padding: 0 10px; }
-        button { background: var(--accent); color: #fff; border: none; padding: 15px 25px; font-size: 1rem; font-weight: bold; border-radius: 6px; cursor: pointer; transition: 0.2s; box-shadow: 0 0 10px var(--accent-glow); }
-        button:hover { transform: scale(1.05); background: #2563eb; }
+        button { background: var(--accent); color: #fff; border: none; padding: 15px 30px; font-size: 1.1rem; font-weight: bold; border-radius: 4px; cursor: pointer; transition: 0.2s; box-shadow: 0 0 15px var(--accent-glow); text-transform: uppercase; letter-spacing: 1px; }
+        button:hover { transform: scale(1.05); background: #ff3377; box-shadow: 0 0 25px var(--accent-glow); }
         
-        .stats { font-size: 0.75rem; color: var(--accent); text-align: center; }
+        .stats { font-size: 0.75rem; color: var(--accent); text-align: center; font-weight: bold; }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>QYREX-15 ENGINE</h1>
-        <div class="subtitle">Headless Labs Architecture - Control Flow Flattening & Polymorphism</div>
+        <h1>QYREX-15 EXTREME</h1>
+        <div class="subtitle">Headless Labs | Symbol Math Engine & Number Eradication</div>
     </header>
 
     <div class="workspace">
         <div class="editor-container">
-            <div class="editor-header"><span>source.lua</span><span>Entrada</span></div>
-            <textarea id="inputCode" spellcheck="false" placeholder="-- Ingresa el código de Luau aquí..."></textarea>
+            <div class="editor-header"><span>input.lua</span><span>Código Fuente</span></div>
+            <textarea id="inputCode" spellcheck="false" placeholder='print("Qyrex Domina")'></textarea>
         </div>
 
         <div class="action-panel">
-            <button onclick="compilarQyrex()">Compilar >></button>
-            <div class="stats" id="statusLog">Esperando código...</div>
+            <button onclick="compilarQyrex()">Mutar >></button>
+            <div class="stats" id="statusLog">Sistema Listo</div>
         </div>
 
         <div class="editor-container">
-            <div class="editor-header"><span>qyrex_protected.lua</span><span>Salida LPH-15</span></div>
-            <textarea id="outputCode" spellcheck="false" readonly placeholder="-- El bytecode ofuscado aparecerá aquí..."></textarea>
+            <div class="editor-header"><span>qyrex_obfuscated.lua</span><span>0% Números</span></div>
+            <textarea id="outputCode" spellcheck="false" readonly placeholder="-- El infierno de símbolos aparecerá aquí..."></textarea>
         </div>
     </div>
 
     <script>
-        // Generador de variables polimórficas tipo Luraph (Ej: lIllIIll)
+        // Generador de ID polimórfico (lIllIIll)
         function genLuraphID(len = Math.floor(Math.random() * 8) + 6) {
             let res = '';
             for(let i=0; i<len; i++) res += Math.random() > 0.5 ? 'l' : 'I';
             return res;
         }
 
-        // Generador de trampas de matemáticas (Opaque Predicates)
+        // MOTOR MAGICO: Convierte cualquier número en símbolos !#$%&/()
+        function obfNum(num) {
+            const syms = "!#$%&/()=?¡@+*~_-,;><°|"; 
+            const genStr = (l) => Array.from({length: l}, () => syms[Math.floor(Math.random() * syms.length)]).join('');
+            
+            if (num === 0) return `#""`;
+            
+            // Si el número es pequeño, hacemos una cadena de esa longitud
+            if (num <= 15) return `#"${genStr(num)}"`;
+            
+            // Si el número es grande, usamos matemáticas: (A * A) + B para no hacer cadenas gigantes
+            const factor = Math.floor(Math.sqrt(num));
+            const remainder = num - (factor * factor);
+            
+            let expr = `( #"${genStr(factor)}" * #"${genStr(factor)}" )`;
+            if (remainder > 0) {
+                expr += ` + #"${genStr(remainder)}"`;
+            }
+            return expr;
+        }
+
+        // Generador de código basura con símbolos
         function genJunkMath() {
-            const v = genLuraphID(4);
-            return `local ${v} = ${(Math.random() * 1000).toFixed(2)}; if ${v} == 0 then return end;`;
+            const v = genLuraphID(6);
+            return `local ${v} = ${obfNum(Math.floor(Math.random() * 300))}; if ${v} == ${obfNum(0)} then return end;`;
         }
 
         function compilarQyrex() {
             const input = document.getElementById('inputCode').value;
             if (!input.trim()) return document.getElementById('statusLog').innerText = "Error: Código vacío";
 
-            document.getElementById('statusLog').innerText = "Cifrando AST...";
+            document.getElementById('statusLog').innerText = "Erradicando números...";
 
-            // Variables de entorno de la VM
             const stateVar = genLuraphID();
             const memVar = genLuraphID();
             const keyVar = genLuraphID();
             const bufferVar = genLuraphID();
             const indexVar = genLuraphID();
-            const xorKey = Math.floor(Math.random() * 200) + 50;
+            const xorKey = Math.floor(Math.random() * 150) + 50;
 
-            // Cifrado de bytes
-            let bytecode = [];
+            // Cifrado de los bytes originales
+            let bytecodeMutado = [];
             for (let i = 0; i < input.length; i++) {
-                bytecode.push(input.charCodeAt(i) ^ xorKey);
+                // A cada byte del texto lo convertimos en un cálculo de símbolos
+                bytecodeMutado.push(obfNum(input.charCodeAt(i) ^ xorKey));
             }
 
-            // Generación de la Máquina de Estados (CFF)
-            // En lugar de una ejecución lineal, el script salta aleatoriamente entre bloques.
+            // Ensamblaje del Control Flow Flattening (CFF) SIN NÚMEROS
             let cff = `
--- Protegido por QyrexAPI V15 Engine (Headless Labs)
-local ${memVar} = {${bytecode.join(',')}}
-local ${keyVar} = ${xorKey}
+local ${memVar} = {${bytecodeMutado.join(',')}}
+local ${keyVar} = ${obfNum(xorKey)}
 local ${bufferVar} = ""
-local ${stateVar} = 1
+local ${stateVar} = ${obfNum(1)}
 
 while true do
-    if ${stateVar} == 3 then
-        -- Estado 3: Ejecución segura
+    if ${stateVar} == ${obfNum(3)} then
         local _s, _e = pcall(function() return loadstring(${bufferVar})() end)
         if not _s then return end
         break
-    elseif ${stateVar} == 1 then
-        -- Estado 1: Anti-Tamper & Entorno
+    elseif ${stateVar} == ${obfNum(1)} then
         ${genJunkMath()}
         if type(bit32) ~= "table" then while true do end end
         if type(bit32.bxor) ~= "function" then return end
-        ${stateVar} = 4
-    elseif ${stateVar} == 4 then
-        -- Estado 4: Ensamblaje de Bytecode
-        for ${indexVar} = 1, #${memVar} do
+        ${stateVar} = ${obfNum(4)}
+    elseif ${stateVar} == ${obfNum(4)} then
+        for ${indexVar} = ${obfNum(1)}, #${memVar} do
             ${bufferVar} = ${bufferVar} .. string.char(bit32.bxor(${memVar}[${indexVar}], ${keyVar}))
         end
-        ${stateVar} = 2
-    elseif ${stateVar} == 2 then
-        -- Estado 2: Verificación de Integridad
-        if #${bufferVar} ~= ${input.length} then while true do print("Qyrex Security Crash") end end
-        ${stateVar} = 3
+        ${stateVar} = ${obfNum(2)}
+    elseif ${stateVar} == ${obfNum(2)} then
+        if #${bufferVar} ~= ${obfNum(input.length)} then while true do end end
+        ${stateVar} = ${obfNum(3)}
     end
 end
 `;
-            // Minificar para máxima ofuscación (eliminar indentación y juntar líneas)
-            let result = cff.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
             
-            // Añadir bloques masivos de variables locales inútiles al inicio para crashear decompiladores
+            let minified = cff.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+            
+            // Bombardeo de variables basura al inicio llenas de símbolos
             let junkHeader = "";
-            for(let i=0; i<50; i++) {
-                junkHeader += `local ${genLuraphID()} = ${Math.floor(Math.random() * 999999)}; `;
+            for(let i=0; i<40; i++) {
+                junkHeader += `local ${genLuraphID()} = ${obfNum(Math.floor(Math.random() * 200))}; `;
             }
 
-            document.getElementById('outputCode').value = junkHeader + result;
-            document.getElementById('statusLog').innerText = `Completado: ${result.length} bytes`;
+            document.getElementById('outputCode').value = junkHeader + minified;
+            document.getElementById('statusLog').innerText = `Éxito: ${minified.length} caracteres`;
         }
     </script>
 </body>
