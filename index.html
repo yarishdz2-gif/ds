@@ -3,171 +3,139 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Qyrex Obfuscator | Luau Protection</title>
+    <title>QyrexAPI | LPH-15 Architecture Obfuscator</title>
     <style>
         :root {
-            --bg-color: #0f1115;
-            --panel-bg: #1a1d24;
-            --primary: #00ff88;
-            --text-main: #e2e8f0;
-            --text-muted: #94a3b8;
+            --bg-base: #09090b;
+            --bg-panel: #18181b;
+            --accent: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.5);
+            --text-main: #f8fafc;
+            --text-muted: #64748b;
         }
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-            padding: 2rem;
-        }
-        header {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-        h1 {
-            color: var(--primary);
-            font-size: 2.5rem;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-        p { color: var(--text-muted); }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Consolas', 'Courier New', monospace; }
+        body { background-color: var(--bg-base); color: var(--text-main); display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 2rem; }
+        header { text-align: center; margin-bottom: 2rem; border-bottom: 1px solid #333; padding-bottom: 1rem; width: 100%; max-width: 1400px; }
+        h1 { color: var(--accent); font-size: 2rem; text-shadow: 0 0 15px var(--accent-glow); letter-spacing: 2px; }
+        .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-top: 5px; }
         
-        .container {
-            display: flex;
-            gap: 20px;
-            width: 100%;
-            max-width: 1200px;
-        }
-        .editor-section {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        textarea {
-            width: 100%;
-            height: 400px;
-            background-color: var(--panel-bg);
-            color: var(--text-main);
-            border: 1px solid #333;
-            border-radius: 8px;
-            padding: 15px;
-            font-family: 'Courier New', Courier, monospace;
-            resize: none;
-            outline: none;
-        }
-        textarea:focus { border-color: var(--primary); }
+        .workspace { display: flex; gap: 20px; width: 100%; max-width: 1400px; height: 70vh; }
+        .editor-container { flex: 1; display: flex; flex-direction: column; background: var(--bg-panel); border: 1px solid #27272a; border-radius: 8px; overflow: hidden; }
+        .editor-header { background: #0f0f12; padding: 10px 15px; font-size: 0.85rem; color: var(--text-muted); border-bottom: 1px solid #27272a; display: flex; justify-content: space-between; }
         
-        .controls {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 0 20px;
-        }
-        button {
-            background-color: var(--primary);
-            color: #000;
-            border: none;
-            padding: 15px 30px;
-            font-size: 1.2rem;
-            font-weight: bold;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-        }
-        button:hover {
-            background-color: #00cc6a;
-            transform: scale(1.05);
-        }
+        textarea { flex: 1; width: 100%; background-color: transparent; color: #a1a1aa; border: none; padding: 15px; font-size: 14px; resize: none; outline: none; }
+        textarea:focus { color: #fff; }
+        
+        .action-panel { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 15px; padding: 0 10px; }
+        button { background: var(--accent); color: #fff; border: none; padding: 15px 25px; font-size: 1rem; font-weight: bold; border-radius: 6px; cursor: pointer; transition: 0.2s; box-shadow: 0 0 10px var(--accent-glow); }
+        button:hover { transform: scale(1.05); background: #2563eb; }
+        
+        .stats { font-size: 0.75rem; color: var(--accent); text-align: center; }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>Qyrex Obfuscator</h1>
-        <p>Motor de ofuscación polimórfica para Luau</p>
+        <h1>QYREX-15 ENGINE</h1>
+        <div class="subtitle">Headless Labs Architecture - Control Flow Flattening & Polymorphism</div>
     </header>
 
-    <div class="container">
-        <div class="editor-section">
-            <label for="inputCode">Código Luau Original:</label>
-            <textarea id="inputCode" placeholder='print("Iniciando sistema...")'></textarea>
+    <div class="workspace">
+        <div class="editor-container">
+            <div class="editor-header"><span>source.lua</span><span>Entrada</span></div>
+            <textarea id="inputCode" spellcheck="false" placeholder="-- Ingresa el código de Luau aquí..."></textarea>
         </div>
 
-        <div class="controls">
-            <button onclick="ofuscar()">Ofuscar -></button>
+        <div class="action-panel">
+            <button onclick="compilarQyrex()">Compilar >></button>
+            <div class="stats" id="statusLog">Esperando código...</div>
         </div>
 
-        <div class="editor-section">
-            <label for="outputCode">Código Ofuscado:</label>
-            <textarea id="outputCode" readonly placeholder="El resultado aparecerá aquí..."></textarea>
+        <div class="editor-container">
+            <div class="editor-header"><span>qyrex_protected.lua</span><span>Salida LPH-15</span></div>
+            <textarea id="outputCode" spellcheck="false" readonly placeholder="-- El bytecode ofuscado aparecerá aquí..."></textarea>
         </div>
     </div>
 
     <script>
-        // Generador de nombres polimórficos
-        function generarID(longitud) {
-            const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-            let resultado = '';
-            for (let i = 0; i < longitud; i++) {
-                resultado += caracteres.charAt(Math.floor(Math.random() * caracteres.length));
-            }
-            return resultado;
+        // Generador de variables polimórficas tipo Luraph (Ej: lIllIIll)
+        function genLuraphID(len = Math.floor(Math.random() * 8) + 6) {
+            let res = '';
+            for(let i=0; i<len; i++) res += Math.random() > 0.5 ? 'l' : 'I';
+            return res;
         }
 
-        // Generador de código basura (Anti-Tamper falso)
-        function generarBasura() {
-            const vars = ['A', 'B', 'C', 'X', 'Y', 'Z'];
-            const varName = vars[Math.floor(Math.random() * vars.length)] + Math.floor(Math.random() * 999);
-            return `local ${varName} = ${Math.floor(Math.random() * 999999)}; if ${varName} == 0 then return end; `;
+        // Generador de trampas de matemáticas (Opaque Predicates)
+        function genJunkMath() {
+            const v = genLuraphID(4);
+            return `local ${v} = ${(Math.random() * 1000).toFixed(2)}; if ${v} == 0 then return end;`;
         }
 
-        function ofuscar() {
+        function compilarQyrex() {
             const input = document.getElementById('inputCode').value;
-            if (!input.trim()) return alert("Ingresa código para ofuscar.");
+            if (!input.trim()) return document.getElementById('statusLog').innerText = "Error: Código vacío";
 
-            // Variables mutadas por sesión
-            const vClave = generarID(6);
-            const vMemoria = generarID(9);
-            const vDecodificador = generarID(12);
-            const vIndice = generarID(5);
+            document.getElementById('statusLog').innerText = "Cifrando AST...";
 
-            // Generar clave XOR única (1-255)
-            const xorKey = Math.floor(Math.random() * 254) + 1;
-            
-            // Cifrar el payload
-            let payloadCifrado = [];
+            // Variables de entorno de la VM
+            const stateVar = genLuraphID();
+            const memVar = genLuraphID();
+            const keyVar = genLuraphID();
+            const bufferVar = genLuraphID();
+            const indexVar = genLuraphID();
+            const xorKey = Math.floor(Math.random() * 200) + 50;
+
+            // Cifrado de bytes
+            let bytecode = [];
             for (let i = 0; i < input.length; i++) {
-                payloadCifrado.push(input.charCodeAt(i) ^ xorKey);
+                bytecode.push(input.charCodeAt(i) ^ xorKey);
             }
 
-            // Construir el stub (cargador de la VM)
-            let stub = `
-                ${generarBasura()}
-                local ${vClave} = ${xorKey};
-                local ${vMemoria} = {${payloadCifrado.join(',')}};
-                ${generarBasura()}
-                local ${vDecodificador} = "";
-                if type(bit32) ~= "table" or type(bit32.bxor) ~= "function" then while true do end end;
-                for ${vIndice} = 1, #${vMemoria} do 
-                    ${vDecodificador} = ${vDecodificador} .. string.char(bit32.bxor(${vMemoria}[${vIndice}], ${vClave}));
-                end;
-                ${generarBasura()}
-                local s, r = pcall(function() return loadstring(${vDecodificador})() end);
-                if not s then return nil end;
-            `;
+            // Generación de la Máquina de Estados (CFF)
+            // En lugar de una ejecución lineal, el script salta aleatoriamente entre bloques.
+            let cff = `
+-- Protegido por QyrexAPI V15 Engine (Headless Labs)
+local ${memVar} = {${bytecode.join(',')}}
+local ${keyVar} = ${xorKey}
+local ${bufferVar} = ""
+local ${stateVar} = 1
 
-            // Minificar
-            const minified = stub.replace(/\n/g, ' ').replace(/\s+/g, ' ');
-            document.getElementById('outputCode').value = minified;
+while true do
+    if ${stateVar} == 3 then
+        -- Estado 3: Ejecución segura
+        local _s, _e = pcall(function() return loadstring(${bufferVar})() end)
+        if not _s then return end
+        break
+    elseif ${stateVar} == 1 then
+        -- Estado 1: Anti-Tamper & Entorno
+        ${genJunkMath()}
+        if type(bit32) ~= "table" then while true do end end
+        if type(bit32.bxor) ~= "function" then return end
+        ${stateVar} = 4
+    elseif ${stateVar} == 4 then
+        -- Estado 4: Ensamblaje de Bytecode
+        for ${indexVar} = 1, #${memVar} do
+            ${bufferVar} = ${bufferVar} .. string.char(bit32.bxor(${memVar}[${indexVar}], ${keyVar}))
+        end
+        ${stateVar} = 2
+    elseif ${stateVar} == 2 then
+        -- Estado 2: Verificación de Integridad
+        if #${bufferVar} ~= ${input.length} then while true do print("Qyrex Security Crash") end end
+        ${stateVar} = 3
+    end
+end
+`;
+            // Minificar para máxima ofuscación (eliminar indentación y juntar líneas)
+            let result = cff.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+            
+            // Añadir bloques masivos de variables locales inútiles al inicio para crashear decompiladores
+            let junkHeader = "";
+            for(let i=0; i<50; i++) {
+                junkHeader += `local ${genLuraphID()} = ${Math.floor(Math.random() * 999999)}; `;
+            }
+
+            document.getElementById('outputCode').value = junkHeader + result;
+            document.getElementById('statusLog').innerText = `Completado: ${result.length} bytes`;
         }
     </script>
 </body>
