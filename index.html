@@ -329,20 +329,11 @@ print(response.obfuscatedCode)</pre>
                 hex += '\\x' + enc.toString(16).padStart(2, '0');
             }
 
-            // Build table E with randomized decoys
-            let pool = [];
-            for (let i = 0; i < 20; i++) {
-                let randStr = Math.random().toString(36).substring(2, 10);
-                pool.push(`"${randStr}"`);
-            }
-            pool[2] = `"${hex}"`;
-
             let watermarkHeader = options.watermark ? `-- Protected by QyrexObf (qyrex.hopto.org)\n` : '';
             
-            // Single line formatting matching user example request
-            let template = `${watermarkHeader}return({Wh=bit32 and bit32.rrotate or function(a,b)b=b%32 local c=2^32 a=a%c return((a-a%2^b)/2^b+a*2^(32-b)%c)%c end,MR=function(y,C,f)local l={}for i=1,#y do table.insert(l,string.char(bit32 and bit32.bxor(y:byte(i),C) or f(y:byte(i),C)))end return table.concat(l) end,E={${pool.join(',')}},X=${xorKey},D=function(s,k)local b='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/' s=string.gsub(s,'[^'..b..'=]','')return(s:gsub('.',function(x)if(x=='=')then return''end local r,f='',(b:find(x)-1)for i=6,1,-1 do r=r..(f%2^i-f%2^(i-1)>0 and '1' or '0')end return r end):gsub('%d%d%d?%d?%d?%d?%d?%d?',function(x)if(#x~=8)then return''end local c=0 for i=1,8 do c=c+(x:sub(i,i)=='1' and 2^(8-i) or 0)end return string.char(c) end))end})()`;
-
-            return template;
+            // Robust single-line executable VM matching server backend
+            let script = `local p=pcall local ld=loadstring or (getgenv and getgenv().loadstring) local d="${hex}" local k=${xorKey} local b='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/' local function dec(data) data = string.gsub(data, '[^'..b..'=]', '') return (data:gsub('.', function(x) if (x == '=') then return '' end local r,f='',(b:find(x)-1) for i=6,1,-1 do r=r..(f%2^i-f%2^(i-1)>0 and '1' or '0') end return r end):gsub('%d%d%d?%d?%d?%d?%d?%d?', function(x) if (#x ~= 8) then return '' end local c=0 for i=1,8 do c=c+(x:sub(i,i)=='1' and 2^(8-i) or 0) end return string.char(c) end)) end local bxor = bit32 and bit32.bxor or function(a,b) return a^b end local buf={} for i=1, #d do table.insert(buf, string.char(bxor(d:byte(i), k))) end local s,f = p(ld, dec(table.concat(buf))) if s and type(f)=="function" then p(f) end`;
+            return watermarkHeader + script.replace(/\s+/g, ' ').trim();
         }
 
         document.addEventListener('DOMContentLoaded', () => {
