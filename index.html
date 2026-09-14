@@ -1,304 +1,329 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QyrexObf | Executor Edition v15</title>
+    <title>QYREX - Ultimate Luau Obfuscator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&display=swap');
-        
         :root {
-            --bg-base: #030303;
-            --bg-panel: #0d0d12;
-            --accent: #00ff88;
-            --accent-glow: rgba(0, 255, 136, 0.4);
-            --danger: #ff0055;
-            --text-main: #f8fafc;
-            --text-muted: #475569;
-            --border: #1f2937;
+            --bg-color: #030305;
+            --accent-main: #8a2be2; /* Deep Purple */
+            --accent-secondary: #00ffcc; /* Cyan/Neon Green */
+            --panel-bg: rgba(10, 10, 15, 0.85);
         }
-        
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Fira Code', monospace; }
-        
-        body { 
-            background-color: var(--bg-base); 
-            color: var(--text-main); 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            min-height: 100vh; 
-            padding: 2rem; 
-            background-image: radial-gradient(circle at 50% 0%, #1a1a24 0%, transparent 50%);
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(138, 43, 226, 0.08), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(0, 255, 204, 0.08), transparent 25%);
+            color: #d1d5db;
+            min-height: 100vh;
+            overflow-x: hidden;
         }
-        
-        header { 
-            text-align: center; 
-            margin-bottom: 2rem; 
-            border-bottom: 1px solid var(--border); 
-            padding-bottom: 1rem; 
-            width: 100%; 
-            max-width: 1500px; 
+        h1, h2, h3 {
+            font-family: 'Rajdhani', sans-serif;
         }
-        
-        h1 { 
-            color: var(--text-main); 
-            font-size: 2.5rem; 
-            letter-spacing: 2px; 
-            font-weight: 700;
+        .glass-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(138, 43, 226, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
         }
-        h1 span { color: var(--accent); text-shadow: 0 0 20px var(--accent-glow); }
-        
-        .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-top: 10px; text-transform: uppercase; letter-spacing: 3px; }
-        
-        .workspace { display: flex; gap: 20px; width: 100%; max-width: 1500px; height: 75vh; }
-        
-        .editor-container { 
-            flex: 1; 
-            display: flex; 
-            flex-direction: column; 
-            background: var(--bg-panel); 
-            border: 1px solid var(--border); 
-            border-radius: 8px; 
-            overflow: hidden; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        .neon-text {
+            text-shadow: 0 0 10px var(--accent-main), 0 0 20px var(--accent-main);
         }
-        
-        .editor-header { 
-            background: #09090b; 
-            padding: 12px 20px; 
-            font-size: 0.85rem; 
-            color: var(--text-muted); 
-            border-bottom: 1px solid var(--border); 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center;
+        .neon-border {
+            box-shadow: inset 0 0 15px rgba(138, 43, 226, 0.1), 0 0 15px rgba(138, 43, 226, 0.2);
+            border: 1px solid rgba(138, 43, 226, 0.5);
         }
-        
-        .status-dot {
-            height: 10px; width: 10px; background-color: var(--danger); border-radius: 50%; display: inline-block; box-shadow: 0 0 8px var(--danger);
+        .neon-border:focus-within {
+            box-shadow: inset 0 0 20px rgba(0, 255, 204, 0.1), 0 0 20px rgba(0, 255, 204, 0.3);
+            border-color: var(--accent-secondary);
         }
-        .status-dot.ready { background-color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #050508; }
+        ::-webkit-scrollbar-thumb { background: #3b1563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--accent-main); }
         
-        textarea { 
-            flex: 1; 
-            width: 100%; 
-            background-color: transparent; 
-            color: #d1d5db; 
-            border: none; 
-            padding: 20px; 
-            font-size: 13px; 
-            resize: none; 
-            outline: none; 
-            line-height: 1.5;
-            word-wrap: break-word;
+        /* Checkbox Customization */
+        .checkbox-wrapper input[type="checkbox"] {
+            appearance: none;
+            background-color: #1a1a24;
+            margin: 0;
+            font: inherit;
+            color: currentColor;
+            width: 1.15em;
+            height: 1.15em;
+            border: 1px solid rgba(138, 43, 226, 0.5);
+            border-radius: 0.15em;
+            display: grid;
+            place-content: center;
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
         }
-        textarea:focus { color: var(--accent); }
+        .checkbox-wrapper input[type="checkbox"]::before {
+            content: "";
+            width: 0.65em;
+            height: 0.65em;
+            transform: scale(0);
+            transition: 120ms transform ease-in-out;
+            box-shadow: inset 1em 1em var(--accent-secondary);
+            transform-origin: center;
+            clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+        }
+        .checkbox-wrapper input[type="checkbox"]:checked {
+            border-color: var(--accent-secondary);
+            background-color: rgba(0, 255, 204, 0.1);
+        }
+        .checkbox-wrapper input[type="checkbox"]:checked::before {
+            transform: scale(1);
+        }
+
+        .btn-obfuscate {
+            background: linear-gradient(45deg, var(--accent-main), #5c1b96);
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-obfuscate::after {
+            content: '';
+            position: absolute;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: linear-gradient(rgba(255,255,255,0.1), rgba(255,255,255,0));
+            transform: rotate(30deg) translateY(-100%);
+            transition: transform 0.5s;
+        }
+        .btn-obfuscate:hover::after {
+            transform: rotate(30deg) translateY(100%);
+        }
+
+        .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(0, 255, 204, 0.3);
+            border-top: 2px solid var(--accent-secondary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        .action-panel { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px; padding: 0 20px; min-width: 250px; }
-        
-        .btn-obfuscate { 
-            background: transparent; 
-            color: var(--accent); 
-            border: 1px solid var(--accent); 
-            padding: 15px 40px; 
-            font-size: 1.2rem; 
-            font-weight: bold; 
-            border-radius: 4px; 
-            cursor: pointer; 
-            transition: 0.3s; 
-            text-transform: uppercase; 
-            letter-spacing: 2px;
-            box-shadow: 0 0 15px rgba(0, 255, 136, 0.1) inset;
+        textarea {
+            tab-size: 4;
         }
-        .btn-obfuscate:hover { 
-            background: var(--accent); 
-            color: #000; 
-            box-shadow: 0 0 30px var(--accent-glow); 
-            transform: scale(1.05); 
-        }
-        
-        .console-log {
-            background: #000; border: 1px solid var(--border); width: 100%; border-radius: 6px; padding: 15px; font-size: 0.75rem; color: var(--text-muted); height: 200px; overflow-y: auto; text-align: left;
-        }
-        .log-entry { margin-bottom: 5px; }
-        .log-success { color: var(--accent); }
-        .log-error { color: var(--danger); }
-        .log-info { color: #3b82f6; }
     </style>
 </head>
-<body>
+<body class="p-4 md:p-8 flex flex-col items-center">
 
-    <header>
-        <h1>QYREX<span>OBF</span></h1>
-        <div class="subtitle">Executor Edition - LPH-15 Architecture</div>
+    <header class="w-full max-w-7xl flex justify-between items-center mb-8 border-b border-purple-900/50 pb-4">
+        <div class="flex items-center gap-4">
+            <div class="relative">
+                <i class="fa-solid fa-code text-4xl text-purple-500 neon-text"></i>
+                <i class="fa-brands fa-lua absolute -bottom-1 -right-2 text-xl text-teal-400"></i>
+            </div>
+            <div>
+                <h1 class="text-4xl font-bold tracking-widest text-white uppercase">QYREX<span class="text-purple-500">_</span>ENGINE</h1>
+                <p class="text-xs text-teal-400 uppercase tracking-[0.2em] font-mono">Luau Exploitation Security Level: LURAPH-KILLER</p>
+            </div>
+        </div>
+        <div class="hidden md:flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+            <span class="text-xs font-mono text-gray-400">API Status: ONLINE</span>
+        </div>
     </header>
 
-    <div class="workspace">
-        <div class="editor-container">
-            <div class="editor-header">
-                <span>source.lua</span>
-                <span class="status-dot ready"></span>
-            </div>
-            <textarea id="inputCode" spellcheck="false" placeholder='-- Ingresa el script aquí. Compatible con Synapse, Krnl, Fluxus, Delta...
-print("Qyrex Domina a los Skidders")'></textarea>
-        </div>
+    <main class="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-6 flex-grow">
+        
+        <!-- Panel de Configuración -->
+        <aside class="lg:col-span-3 glass-panel rounded-xl p-5 h-fit">
+            <h2 class="text-xl font-bold mb-4 border-b border-purple-900/50 pb-2 text-purple-400 uppercase tracking-wide"><i class="fa-solid fa-microchip mr-2"></i> Protection Layers</h2>
+            
+            <div class="space-y-4 font-mono text-sm">
+                
+                <label class="flex items-center checkbox-wrapper group">
+                    <input type="checkbox" id="optCFF" checked disabled title="Always enabled on Qyrex">
+                    <span class="ml-3 text-gray-300 group-hover:text-teal-300 transition">Control Flow Flattening</span>
+                </label>
+                
+                <label class="flex items-center checkbox-wrapper group">
+                    <input type="checkbox" id="optPolymorph" checked disabled title="Always enabled on Qyrex">
+                    <span class="ml-3 text-gray-300 group-hover:text-teal-300 transition">Polymorphic Variables (lIllI)</span>
+                </label>
 
-        <div class="action-panel">
-            <button class="btn-obfuscate" onclick="compilarQyrex()">Ofuscar</button>
-            <div class="console-log" id="consoleOutput">
-                <div class="log-entry log-info">[+] Qyrex VM Engine Initialized</div>
-                <div class="log-entry log-info">[+] Ready to hook environment...</div>
-            </div>
-        </div>
+                <div class="w-full h-px bg-purple-900/30 my-2"></div>
 
-        <div class="editor-container">
-            <div class="editor-header">
-                <span>qyrex_protected.lua</span>
-                <span class="status-dot" id="outDot"></span>
+                <label class="flex items-center checkbox-wrapper group">
+                    <input type="checkbox" id="optNumEradication" checked>
+                    <span class="ml-3 text-gray-300 group-hover:text-white transition">Number Eradication</span>
+                </label>
+
+                <label class="flex items-center checkbox-wrapper group">
+                    <input type="checkbox" id="optCoroutine">
+                    <span class="ml-3 text-gray-300 group-hover:text-white transition">Coroutine Wrapper (Anti-Dump)</span>
+                </label>
+                
+                <label class="flex items-center checkbox-wrapper group">
+                    <input type="checkbox" id="optAntiSkid" checked>
+                    <span class="ml-3 text-gray-300 group-hover:text-white transition">Anti-Skid Sandbox Trap</span>
+                </label>
+
+                <label class="flex items-center checkbox-wrapper group">
+                    <input type="checkbox" id="optJunkCode" checked>
+                    <span class="ml-3 text-gray-300 group-hover:text-white transition">Inject Junk Code</span>
+                </label>
+
+                <div class="pt-6">
+                    <button id="obfuscateBtn" class="w-full btn-obfuscate text-white font-bold py-3 px-4 rounded transition duration-300 flex items-center justify-center gap-3 border border-purple-500 shadow-[0_0_15px_rgba(138,43,226,0.3)] hover:shadow-[0_0_25px_rgba(138,43,226,0.6)] uppercase tracking-wider text-sm">
+                        <i class="fa-solid fa-lock"></i>
+                        <span id="btnText">Encrypt Script</span>
+                        <div id="spinner" class="spinner"></div>
+                    </button>
+                    <p class="text-center text-[10px] text-gray-500 mt-2">Connects to localhost:3000 API</p>
+                </div>
             </div>
-            <textarea id="outputCode" spellcheck="false" readonly placeholder="-- El código encriptado e inyectable aparecerá aquí..."></textarea>
+        </aside>
+
+        <!-- Editores de Código -->
+        <div class="lg:col-span-9 grid grid-cols-1 xl:grid-cols-2 gap-6 h-[70vh] xl:h-auto min-h-[550px]">
+            
+            <!-- Panel Input -->
+            <div class="glass-panel rounded-xl flex flex-col neon-border transition-all duration-300 overflow-hidden relative group">
+                <div class="bg-[#08080c] px-4 py-2 border-b border-purple-900/40 flex justify-between items-center z-10">
+                    <span class="text-sm font-bold text-gray-300 tracking-wider"><i class="fa-solid fa-file-code text-purple-400 mr-2"></i>RAW LUAU</span>
+                    <button id="clearBtn" class="text-xs text-gray-500 hover:text-red-400 transition"><i class="fa-solid fa-eraser"></i> CLEAR</button>
+                </div>
+                <!-- Líneas de fondo -->
+                <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: linear-gradient(#8a2be2 1px, transparent 1px); background-size: 100% 24px; top: 38px;"></div>
+                
+                <textarea id="inputCode" class="w-full flex-grow bg-transparent text-gray-300 p-4 text-[13px] outline-none resize-none z-10 leading-[24px]" placeholder="-- Pega tu script para Roblox (Luau) aquí...&#10;&#10;local player = game.Players.LocalPlayer&#10;print('Cargando script secreto para: ' .. player.Name)&#10;&#10;local function aimbot()&#10;    -- Tu código mágico&#10;    print('Target locked')&#10;end&#10;&#10;aimbot()" spellcheck="false"></textarea>
+            </div>
+
+            <!-- Panel Output -->
+            <div class="glass-panel rounded-xl flex flex-col neon-border transition-all duration-300 overflow-hidden relative">
+                <div class="bg-[#08080c] px-4 py-2 border-b border-purple-900/40 flex justify-between items-center z-10">
+                    <span class="text-sm font-bold text-teal-400 tracking-wider"><i class="fa-solid fa-shield-halved mr-2"></i>QYREX BYTECODE</span>
+                    <div class="flex gap-4">
+                        <button id="copyBtn" class="text-xs text-gray-500 hover:text-teal-400 transition"><i class="fa-solid fa-copy"></i> COPY</button>
+                        <button id="downloadBtn" class="text-xs text-gray-500 hover:text-teal-400 transition"><i class="fa-solid fa-download"></i> SAVE.LUA</button>
+                    </div>
+                </div>
+                
+                <textarea id="outputCode" class="w-full flex-grow bg-[#030305] text-teal-500/80 p-4 text-[12px] outline-none resize-none z-10 font-mono" placeholder="-- El código cifrado indestructible aparecerá aquí..." readonly spellcheck="false"></textarea>
+                
+                <!-- Overlay de Éxito -->
+                <div id="statusOverlay" class="absolute inset-0 bg-[#030305]/90 backdrop-blur-md flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300 z-20">
+                    <div class="text-center">
+                        <i class="fa-solid fa-shield-check text-6xl text-teal-400 mb-3 drop-shadow-[0_0_15px_rgba(0,255,204,0.6)]"></i>
+                        <p id="statusMsg" class="font-bold text-white tracking-[0.2em] uppercase font-sans text-xl">OBFUSCATION COMPLETE</p>
+                    </div>
+                </div>
+            </div>
+
         </div>
-    </div>
+    </main>
 
     <script>
-        function logMsg(msg, type = 'info') {
-            const consoleEl = document.getElementById('consoleOutput');
-            consoleEl.innerHTML += `<div class="log-entry log-${type}">[*] ${msg}</div>`;
-            consoleEl.scrollTop = consoleEl.scrollHeight;
-        }
+        document.addEventListener('DOMContentLoaded', () => {
+            const inputCode = document.getElementById('inputCode');
+            const outputCode = document.getElementById('outputCode');
+            const obfuscateBtn = document.getElementById('obfuscateBtn');
+            const btnText = document.getElementById('btnText');
+            const btnIcon = obfuscateBtn.querySelector('i');
+            const spinner = document.getElementById('spinner');
+            const clearBtn = document.getElementById('clearBtn');
+            const copyBtn = document.getElementById('copyBtn');
+            const downloadBtn = document.getElementById('downloadBtn');
+            const statusOverlay = document.getElementById('statusOverlay');
+            const statusMsg = document.getElementById('statusMsg');
 
-        // Generador Polimórfico (lIllIIll)
-        function genLuraphID(len = Math.floor(Math.random() * 10) + 8) {
-            let res = '';
-            for(let i=0; i<len; i++) res += Math.random() > 0.5 ? 'l' : 'I';
-            return res;
-        }
-
-        // Motor de Erradicación Numérica (#"simbolos")
-        function obfNum(num) {
-            const syms = "!#$%&/()=?¡@+*~_-,;><°|{}[]^"; 
-            const genStr = (l) => Array.from({length: l}, () => syms[Math.floor(Math.random() * syms.length)]).join('');
-            
-            if (num === 0) return `#""`;
-            if (num <= 15) return `#"${genStr(num)}"`;
-            
-            const factor = Math.floor(Math.sqrt(num));
-            const remainder = num - (factor * factor);
-            
-            let expr = `( #"${genStr(factor)}" * #"${genStr(factor)}" )`;
-            if (remainder > 0) expr += ` + #"${genStr(remainder)}"`;
-            
-            return expr;
-        }
-
-        function genJunkMath() {
-            const v = genLuraphID();
-            return `local ${v} = ${obfNum(Math.floor(Math.random() * 500))}; if ${v} == ${obfNum(0)} then error("HAHAHAHHA SKIDDER NOOB") end;`;
-        }
-
-        function compilarQyrex() {
-            const input = document.getElementById('inputCode').value;
-            if (!input.trim()) return logMsg("Error: Código vacío.", "error");
-
-            document.getElementById('consoleOutput').innerHTML = ''; // Limpiar consola
-            logMsg("Analizando AST...", "info");
-            
-            setTimeout(() => {
-                logMsg("Aplicando erradicación de números...", "info");
+            const showOverlay = (msg, isError = false) => {
+                statusMsg.textContent = msg;
+                statusMsg.className = `font-bold tracking-[0.2em] uppercase font-sans text-xl ${isError ? 'text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.6)]' : 'text-teal-400 drop-shadow-[0_0_10px_rgba(0,255,204,0.6)]'}`;
+                statusOverlay.querySelector('i').className = `fa-solid ${isError ? 'fa-skull-crossbones text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.6)]' : 'fa-shield-check text-teal-400 drop-shadow-[0_0_15px_rgba(0,255,204,0.6)]'} text-6xl mb-3`;
                 
-                // Variables polimórficas del entorno
-                const vState = genLuraphID();
-                const vMem = genLuraphID();
-                const vKey = genLuraphID();
-                const vBuff = genLuraphID();
-                const vIdx = genLuraphID();
-                
-                // Aliases de entorno (Para que no hookeen funciones globales)
-                const realLoad = genLuraphID();
-                const realChar = genLuraphID();
-                const realXor = genLuraphID();
-                const realCoCreate = genLuraphID();
-                const realCoResume = genLuraphID();
+                statusOverlay.classList.remove('opacity-0');
+                setTimeout(() => statusOverlay.classList.add('opacity-0'), 1800);
+            };
 
-                const xorKey = Math.floor(Math.random() * 200) + 50;
-
-                // Cifrado byte a byte
-                let bytecodeMutado = [];
-                for (let i = 0; i < input.length; i++) {
-                    bytecodeMutado.push(obfNum(input.charCodeAt(i) ^ xorKey));
+            obfuscateBtn.addEventListener('click', async () => {
+                const code = inputCode.value;
+                if (!code.trim()) {
+                    showOverlay('EMPTY SCRIPT', true);
+                    return;
                 }
 
-                logMsg("Generando hilos fantasma (Stack Hiding)...", "info");
+                // UI Loading state
+                btnText.style.display = 'none';
+                btnIcon.style.display = 'none';
+                spinner.style.display = 'block';
+                obfuscateBtn.disabled = true;
 
-                // Generador del CFF con Anti-Tamper para Executors
-                let cff = `
--- Protect by QyrexObf [qyrex.hopto.org]
+                // Capturar opciones
+                const options = {
+                    numEradication: document.getElementById('optNumEradication').checked,
+                    coroutine: document.getElementById('optCoroutine').checked,
+                    antiSkid: document.getElementById('optAntiSkid').checked,
+                    junkCode: document.getElementById('optJunkCode').checked
+                };
 
-${genJunkMath()}
+                try {
+                    // Llamada al backend Node.js
+                    const response = await fetch('http://localhost:3000/api/obfuscate', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ code, options })
+                    });
 
--- Environment Aliasing (Protección contra hookfunction de Executors)
-local ${realLoad} = loadstring
-local ${realChar} = string.char
-local ${realXor} = bit32.bxor
-local ${realCoCreate} = coroutine.create
-local ${realCoResume} = coroutine.resume
+                    const data = await response.json();
 
-if type(${realLoad}) ~= "function" or type(${realXor}) ~= "function" then
-    error("HAHAHAHHA SKIDDER NOOB")
-end
-
-local ${vMem} = {${bytecodeMutado.join(',')}}
-local ${vKey} = ${obfNum(xorKey)}
-local ${vBuff} = ""
-local ${vState} = ${obfNum(1)}
-
-while true do
-    if ${vState} == ${obfNum(3)} then
-        -- Estado 3: Ejecución en Hilo Fantasma (Anti-Stack Trace)
-        local _f, _e = ${realLoad}(${vBuff})
-        if not _f then error("HAHAHAHHA SKIDDER NOOB") end
-        
-        -- Ejecutamos usando coroutine para ocultar el dump en el executor
-        local _t = ${realCoCreate}(_f)
-        local _s, _r = ${realCoResume}(_t)
-        
-        if not _s then error("HAHAHAHHA SKIDDER NOOB") end
-        break
-    elseif ${vState} == ${obfNum(1)} then
-        -- Estado 1: Trampas y basura
-        ${genJunkMath()}
-        ${vState} = ${obfNum(4)}
-    elseif ${vState} == ${obfNum(4)} then
-        -- Estado 4: Descifrado dinámico
-        for ${vIdx} = ${obfNum(1)}, #${vMem} do
-            ${vBuff} = ${vBuff} .. ${realChar}(${realXor}(${vMem}[${vIdx}], ${vKey}))
-        end
-        ${vState} = ${obfNum(2)}
-    elseif ${vState} == ${obfNum(2)} then
-        -- Estado 2: Verificación de longitud
-        if #${vBuff} ~= ${obfNum(input.length)} then error("HAHAHAHHA SKIDDER NOOB") end
-        ${vState} = ${obfNum(3)}
-    end
-end
-`;
-                
-                // Compresión máxima
-                let minified = cff.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
-                
-                // Bombardeo Anti-Decompilador al inicio
-                let junkHeader = "-- Protect by QyrexObf [qyrex.hopto.org]\n";
-                for(let i=0; i<60; i++) {
-                    junkHeader += `local ${genLuraphID()} = ${obfNum(Math.floor(Math.random() * 300))}; `;
+                    if (data.success) {
+                        outputCode.value = data.obfuscatedCode;
+                        showOverlay('SECURED BY QYREX');
+                    } else {
+                        throw new Error(data.error || 'Server Error');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    outputCode.value = "-- Error conectando al servidor backend (server.js)\n-- Asegúrate de haber ejecutado:\n-- 1. npm init -y\n-- 2. npm install express cors\n-- 3. node server.js\n\nError: " + err.message;
+                    showOverlay('SERVER OFFLINE', true);
+                } finally {
+                    // Restore UI
+                    btnText.style.display = 'block';
+                    btnIcon.style.display = 'block';
+                    spinner.style.display = 'none';
+                    obfuscateBtn.disabled = false;
                 }
+            });
 
-                document.getElementById('outputCode').value = junkHeader + "\n" + minified;
-                document.getElementById('outDot').classList.add('ready');
-                
-                logMsg(`[+] Compilación exitosa. Tamaño: ${minified.length} bytes.`, "success");
-                logMsg(`[+] Hilo Fantasma inyectado.`, "success");
-                logMsg(`[+] Anti-Hooking activado.`, "success");
-            }, 500); // Pequeño delay visual para que parezca que procesa intensamente
-        }
+            // Utils
+            clearBtn.addEventListener('click', () => { inputCode.value = ''; outputCode.value = ''; });
+            
+            copyBtn.addEventListener('click', () => {
+                if (!outputCode.value) return;
+                navigator.clipboard.writeText(outputCode.value).then(() => showOverlay('COPIED TO CLIPBOARD'));
+            });
+
+            downloadBtn.addEventListener('click', () => {
+                if (!outputCode.value) return;
+                const blob = new Blob([outputCode.value], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'qyrex_protected.lua';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+        });
     </script>
 </body>
 </html>
