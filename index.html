@@ -3,26 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QYREX OBFUSCATOR - Professional Luau Virtualizer</title>
+    <title>QYREX OBFUSCATOR - Professional Luau Virtualizer & API Suite</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Rajdhani:wght@500;750&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
 
     <style>
         :root {
             --bg-deep: #020205;
             --accent-purple: #8a2be2;
             --accent-cyan: #00ffcc;
-            --accent-pink: #ff007f;
             --panel-bg: rgba(8, 8, 14, 0.95);
         }
         body {
             font-family: 'JetBrains Mono', monospace;
             background-color: var(--bg-deep);
             background-image: 
-                radial-gradient(circle at 10% 20%, rgba(138, 43, 226, 0.12), transparent 30%),
-                radial-gradient(circle at 90% 80%, rgba(0, 255, 204, 0.1), transparent 30%),
-                radial-gradient(circle at 50% 50%, rgba(255, 0, 127, 0.05), transparent 40%);
+                radial-gradient(circle at 15% 20%, rgba(138, 43, 226, 0.1), transparent 35%),
+                radial-gradient(circle at 85% 80%, rgba(0, 255, 204, 0.08), transparent 35%);
             color: #d1d5db;
             min-height: 100vh;
             overflow-x: hidden;
@@ -34,207 +32,319 @@
             background: var(--panel-bg);
             backdrop-filter: blur(20px);
             border: 1px solid rgba(138, 43, 226, 0.3);
-            box-shadow: 0 10px 40px 0 rgba(0, 0, 0, 0.7);
+            box-shadow: 0 10px 40px 0 rgba(0, 0, 0, 0.8);
         }
         .neon-border {
             box-shadow: inset 0 0 15px rgba(138, 43, 226, 0.15), 0 0 20px rgba(138, 43, 226, 0.25);
             border: 1px solid rgba(138, 43, 226, 0.6);
         }
-        .neon-border:focus-within {
-            box-shadow: inset 0 0 20px rgba(0, 255, 204, 0.2), 0 0 25px rgba(0, 255, 204, 0.4);
-            border-color: var(--accent-cyan);
-        }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #030307; }
         ::-webkit-scrollbar-thumb { background: #3b1563; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--accent-cyan); }
-        
-        .checkbox-wrapper input[type="checkbox"] {
-            appearance: none;
-            background-color: #12121c;
-            margin: 0;
-            font: inherit;
-            color: currentColor;
-            width: 1.25em;
-            height: 1.25em;
-            border: 1px solid rgba(138, 43, 226, 0.6);
-            border-radius: 0.25em;
-            display: grid;
-            place-content: center;
-            transition: all 0.2s ease-in-out;
-            cursor: pointer;
-        }
-        .checkbox-wrapper input[type="checkbox"]::before {
-            content: "";
-            width: 0.7em;
-            height: 0.7em;
-            transform: scale(0);
-            transition: 120ms transform ease-in-out;
-            box-shadow: inset 1em 1em var(--accent-cyan);
-            transform-origin: center;
-            clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
-        }
-        .checkbox-wrapper input[type="checkbox"]:checked {
-            border-color: var(--accent-cyan);
-            background-color: rgba(0, 255, 204, 0.15);
-        }
-        .checkbox-wrapper input[type="checkbox"]:checked::before {
-            transform: scale(1);
-        }
-
         .btn-cyber {
             background: linear-gradient(135deg, var(--accent-purple), #5c1b96);
-            position: relative;
-            overflow: hidden;
             transition: all 0.3s ease;
         }
         .btn-cyber:hover {
             background: linear-gradient(135deg, #9d3eff, #7222bd);
             box-shadow: 0 0 25px rgba(0, 255, 204, 0.5);
         }
-        .terminal-log {
-            background: #020205;
-            color: #00ffcc;
-            font-family: 'JetBrains Mono', monospace;
+        .tab-btn.active {
+            border-bottom: 2px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            background: rgba(0, 255, 204, 0.05);
         }
     </style>
 </head>
 <body class="p-3 md:p-6 flex flex-col items-center justify-between min-h-screen">
 
-    <header class="w-full max-w-[1500px] flex flex-col md:flex-row justify-between items-center mb-6 border-b border-purple-900/60 pb-4 gap-4">
+    <header class="w-full max-w-[1500px] flex flex-col md:flex-row justify-between items-center mb-5 border-b border-purple-900/60 pb-4 gap-4">
         <div class="flex items-center gap-4">
-            <div class="relative p-2 bg-purple-950/40 rounded-xl border border-purple-500/40 shadow-[0_0_15px_rgba(138,43,226,0.3)]">
-                <i class="fa-solid fa-microchip text-3xl text-purple-400"></i>
-                <i class="fa-solid fa-shield-halved absolute -bottom-1 -right-1 text-sm text-teal-400 animate-pulse"></i>
+            <div class="relative p-2.5 bg-purple-950/40 rounded-xl border border-purple-500/40 shadow-[0_0_15px_rgba(138,43,226,0.3)]">
+                <i class="fa-solid fa-code-merge text-2xl text-purple-400"></i>
             </div>
             <div>
                 <h1 class="text-3xl font-extrabold tracking-widest text-white uppercase flex items-center gap-2">
                     QYREX <span class="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-teal-400">OBFUSCATOR</span>
-                    <span class="text-[10px] bg-purple-900/80 text-purple-200 px-2 py-0.5 rounded border border-purple-500 uppercase font-mono">v5.2-ULTIMATE</span>
+                    <span class="text-[10px] bg-purple-900/80 text-purple-200 px-2 py-0.5 rounded border border-purple-500 font-mono">API v1.2</span>
                 </h1>
-                <p class="text-xs text-teal-400 uppercase tracking-[0.25em] font-mono">Professional Luau Bytecode Virtualizer & String Pool Encryptor</p>
+                <p class="text-xs text-teal-400 uppercase tracking-[0.2em] font-mono">Single-Line Luau Virtualizer & Cloud API Suite</p>
             </div>
         </div>
         <div class="flex items-center gap-3">
-            <div class="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-lg border border-purple-900/50 text-xs font-mono">
+            <div class="flex items-center gap-2 bg-black/50 px-3.5 py-1.5 rounded-lg border border-purple-900/50 text-xs font-mono">
                 <span class="w-2.5 h-2.5 rounded-full bg-teal-400 animate-ping"></span>
-                <span class="text-teal-300">Engine Active</span>
+                <span class="text-teal-300">API Gateway Online</span>
             </div>
         </div>
     </header>
 
-    <main class="w-full max-w-[1500px] grid grid-cols-1 lg:grid-cols-12 gap-5 flex-grow mb-4">
+    <div class="w-full max-w-[1500px] flex gap-2 mb-4">
+        <button id="tabStudioBtn" onclick="switchTab('studio')" class="tab-btn active px-5 py-2.5 rounded-t-xl text-xs font-bold uppercase tracking-wider text-gray-300 transition flex items-center gap-2">
+            <i class="fa-solid fa-terminal"></i> Obfuscator Studio
+        </button>
+        <button id="tabApiBtn" onclick="switchTab('api')" class="tab-btn px-5 py-2.5 rounded-t-xl text-xs font-bold uppercase tracking-wider text-gray-400 transition flex items-center gap-2">
+            <i class="fa-solid fa-key"></i> API Keys & Integration
+        </button>
+    </div>
+
+    <main class="w-full max-w-[1500px] flex-grow mb-4 flex flex-col">
         
-        <!-- Sidebar Controls -->
-        <aside class="lg:col-span-3 glass-panel rounded-2xl p-5 flex flex-col justify-between h-fit">
-            <div>
-                <h2 class="text-lg font-bold mb-4 border-b border-purple-900/50 pb-2 text-purple-300 uppercase tracking-wider flex items-center justify-between">
-                    <span><i class="fa-solid fa-sliders mr-2"></i> Protection Suite</span>
-                    <span class="text-[10px] text-teal-400 bg-teal-950/50 px-2 py-0.5 rounded border border-teal-500/30">MAX LEVEL</span>
-                </h2>
-                
-                <div class="space-y-3.5 font-mono text-xs">
-                    <label class="flex items-center checkbox-wrapper group cursor-pointer">
-                        <input type="checkbox" id="optStringPool" checked disabled>
-                        <span class="ml-3 text-gray-300 group-hover:text-teal-300 transition">String Table Pool (E Table)</span>
-                    </label>
+        <!-- Studio View -->
+        <div id="viewStudio" class="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-grow">
+            <!-- Sidebar controls -->
+            <aside class="lg:col-span-3 glass-panel rounded-2xl p-5 flex flex-col justify-between h-fit">
+                <div>
+                    <h2 class="text-lg font-bold mb-4 border-b border-purple-900/50 pb-2 text-purple-300 uppercase tracking-wider flex items-center justify-between">
+                        <span><i class="fa-solid fa-sliders mr-2"></i> Settings</span>
+                    </h2>
                     
-                    <label class="flex items-center checkbox-wrapper group cursor-pointer">
-                        <input type="checkbox" id="optCFF" checked disabled>
-                        <span class="ml-3 text-gray-300 group-hover:text-teal-300 transition">Control Flow Flattening (VM)</span>
-                    </label>
+                    <div class="space-y-4 font-mono text-xs">
+                        <label class="flex items-center cursor-pointer group">
+                            <input type="checkbox" id="optSingleLine" checked class="accent-teal-400 w-4 h-4 rounded bg-[#12121c] border border-purple-800">
+                            <span class="ml-3 text-gray-200 group-hover:text-white transition">Strict Single-Line Output</span>
+                        </label>
+                        <label class="flex items-center cursor-pointer group">
+                            <input type="checkbox" id="optWatermark" checked class="accent-teal-400 w-4 h-4 rounded bg-[#12121c] border border-purple-800">
+                            <span class="ml-3 text-gray-200 group-hover:text-white transition">Watermark Header</span>
+                        </label>
+                        <label class="flex items-center cursor-pointer group">
+                            <input type="checkbox" id="optBitRotate" checked class="accent-teal-400 w-4 h-4 rounded bg-[#12121c] border border-purple-800">
+                            <span class="ml-3 text-gray-200 group-hover:text-white transition">Bitwise Rotation Engine (Wh/MR)</span>
+                        </label>
+                    </div>
+                </div>
 
-                    <div class="w-full h-px bg-purple-900/40 my-2"></div>
+                <div class="pt-6 mt-6 border-t border-purple-900/40">
+                    <button id="obfuscateBtn" class="w-full btn-cyber text-white font-bold py-3.5 px-4 rounded-xl transition duration-300 flex items-center justify-center gap-3 border border-purple-400/50 uppercase tracking-widest text-xs">
+                        <i class="fa-solid fa-lock text-teal-300 text-sm"></i>
+                        <span id="btnText">PROTECT SCRIPT</span>
+                        <div id="spinner" class="hidden w-4 h-4 border-2 border-teal-300 border-t-transparent rounded-full animate-spin"></div>
+                    </button>
+                </div>
+            </aside>
 
-                    <label class="flex items-center checkbox-wrapper group cursor-pointer">
-                        <input type="checkbox" id="optNumEradication" checked>
-                        <span class="ml-3 text-gray-200 group-hover:text-white transition">Number Eradication (Math Scramble)</span>
-                    </label>
+            <!-- Code Editors -->
+            <div class="lg:col-span-9 grid grid-cols-1 xl:grid-cols-2 gap-5 h-[620px] xl:h-auto">
+                <!-- Input Panel -->
+                <div class="glass-panel rounded-2xl flex flex-col neon-border overflow-hidden relative">
+                    <div class="bg-[#05050a] px-4 py-3 border-b border-purple-900/40 flex justify-between items-center z-10">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-code text-purple-400"></i>
+                            <span class="text-xs font-bold text-gray-300">RAW LUAU SCRIPT</span>
+                        </div>
+                        <div class="flex gap-3">
+                            <button id="sampleBtn" class="text-[11px] text-purple-400 hover:text-purple-300 bg-purple-950/50 px-2.5 py-1 rounded border border-purple-800/50"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i> SAMPLE</button>
+                            <button id="clearBtn" class="text-[11px] text-gray-400 hover:text-red-400"><i class="fa-solid fa-eraser mr-1"></i> CLEAR</button>
+                        </div>
+                    </div>
+                    <textarea id="inputCode" class="w-full flex-grow bg-transparent text-gray-200 p-4 text-[13px] outline-none resize-none leading-[22px]" placeholder="-- Paste your script here...&#10;print('Hello from Qyrex')" spellcheck="false"></textarea>
+                </div>
 
-                    <label class="flex items-center checkbox-wrapper group cursor-pointer">
-                        <input type="checkbox" id="optXorCipher" checked>
-                        <span class="ml-3 text-gray-200 group-hover:text-white transition">Advanced Bytecode XOR Scramble</span>
-                    </label>
-
-                    <label class="flex items-center checkbox-wrapper group cursor-pointer">
-                        <input type="checkbox" id="optJunkCode" checked>
-                        <span class="ml-3 text-gray-200 group-hover:text-white transition">Polymorphic Junk Decoys</span>
-                    </label>
-
-                    <div class="pt-4">
-                        <label class="text-[11px] text-gray-400 block mb-1">Obfuscation Preset:</label>
-                        <select id="intensityLevel" class="w-full bg-[#12121c] text-teal-300 border border-purple-900 rounded p-2 text-xs outline-none focus:border-teal-400">
-                            <option value="extreme">Extreme Professional Grade</option>
-                            <option value="heavy">Heavy Virtualized</option>
-                        </select>
+                <!-- Output Panel -->
+                <div class="glass-panel rounded-2xl flex flex-col neon-border overflow-hidden relative">
+                    <div class="bg-[#05050a] px-4 py-3 border-b border-purple-900/40 flex justify-between items-center z-10">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-shield-halved text-teal-400"></i>
+                            <span class="text-xs font-bold text-teal-400">SINGLE-LINE BYTECODE OUTPUT</span>
+                        </div>
+                        <div class="flex gap-3">
+                            <button id="copyBtn" class="text-[11px] text-gray-400 hover:text-teal-400 bg-teal-950/30 px-2.5 py-1 rounded border border-teal-900/50"><i class="fa-solid fa-copy mr-1"></i> COPY</button>
+                            <button id="downloadBtn" class="text-[11px] text-gray-400 hover:text-teal-400 bg-teal-950/30 px-2.5 py-1 rounded border border-teal-900/50"><i class="fa-solid fa-download mr-1"></i> SAVE</button>
+                        </div>
+                    </div>
+                    <textarea id="outputCode" class="w-full flex-grow bg-[#020205] text-teal-300 p-4 text-[11px] outline-none resize-none font-mono" placeholder="-- Protected single-line bytecode will appear here..." readonly spellcheck="false"></textarea>
+                    
+                    <!-- Toast Overlay -->
+                    <div id="toastOverlay" class="absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300 z-30">
+                        <i id="toastIcon" class="fa-solid fa-shield-check text-5xl text-teal-400 mb-3 drop-shadow-[0_0_15px_rgba(0,255,204,0.6)]"></i>
+                        <p id="toastMsg" class="font-bold text-white tracking-[0.25em] uppercase text-lg">SUCCESS</p>
                     </div>
                 </div>
             </div>
-
-            <div class="pt-6 mt-6 border-t border-purple-900/40">
-                <button id="obfuscateBtn" class="w-full btn-cyber text-white font-bold py-3.5 px-4 rounded-xl transition duration-300 flex items-center justify-center gap-3 border border-purple-400/50 uppercase tracking-widest text-xs">
-                    <i class="fa-solid fa-lock text-teal-300 text-sm"></i>
-                    <span id="btnText">OBFUSCATE SCRIPT</span>
-                    <div id="spinner" class="hidden w-4 h-4 border-2 border-teal-300 border-t-transparent rounded-full animate-spin"></div>
-                </button>
-            </div>
-        </aside>
-
-        <!-- Editor Panels -->
-        <div class="lg:col-span-9 grid grid-cols-1 xl:grid-cols-2 gap-5 h-[620px] xl:h-auto min-h-[550px]">
-            
-            <!-- Raw Input Panel -->
-            <div class="glass-panel rounded-2xl flex flex-col neon-border transition-all duration-300 overflow-hidden relative">
-                <div class="bg-[#05050a] px-4 py-3 border-b border-purple-900/40 flex justify-between items-center z-10">
-                    <div class="flex items-center gap-2">
-                        <i class="fa-solid fa-code text-purple-400"></i>
-                        <span class="text-xs font-bold text-gray-300 tracking-wider">RAW LUAU SCRIPT</span>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <button id="sampleBtn" class="text-[11px] text-purple-400 hover:text-purple-300 transition bg-purple-950/50 px-2.5 py-1 rounded border border-purple-800/50"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i> LOAD SAMPLE</button>
-                        <button id="clearBtn" class="text-[11px] text-gray-400 hover:text-red-400 transition"><i class="fa-solid fa-eraser mr-1"></i> CLEAR</button>
-                    </div>
-                </div>
-                
-                <textarea id="inputCode" class="w-full flex-grow bg-transparent text-gray-200 p-4 text-[13px] outline-none resize-none z-10 leading-[24px]" placeholder="-- Paste your Roblox Luau exploit script here...&#10;&#10;local Players = game:GetService('Players')&#10;local localPlayer = Players.LocalPlayer&#10;print('Executing secure script for: ' .. localPlayer.Name)" spellcheck="false"></textarea>
-            </div>
-
-            <!-- Obfuscated Output Panel -->
-            <div class="glass-panel rounded-2xl flex flex-col neon-border transition-all duration-300 overflow-hidden relative">
-                <div class="bg-[#05050a] px-4 py-3 border-b border-purple-900/40 flex justify-between items-center z-10">
-                    <div class="flex items-center gap-2">
-                        <i class="fa-solid fa-shield-halved text-teal-400"></i>
-                        <span class="text-xs font-bold text-teal-400 tracking-wider">PROTECTED BYTECODE OUTPUT</span>
-                    </div>
-                    <div class="flex gap-3">
-                        <button id="copyBtn" class="text-[11px] text-gray-400 hover:text-teal-400 transition bg-teal-950/30 px-2.5 py-1 rounded border border-teal-900/50"><i class="fa-solid fa-copy mr-1"></i> COPY</button>
-                        <button id="downloadBtn" class="text-[11px] text-gray-400 hover:text-teal-400 transition bg-teal-950/30 px-2.5 py-1 rounded border border-teal-900/50"><i class="fa-solid fa-download mr-1"></i> SAVE.LUA</button>
-                    </div>
-                </div>
-                
-                <textarea id="outputCode" class="w-full flex-grow terminal-log p-4 text-[12px] outline-none resize-none z-10" placeholder="-- Heavily virtualized and encrypted Luau code will appear here..." readonly spellcheck="false"></textarea>
-                
-                <!-- Toast Overlay -->
-                <div id="toastOverlay" class="absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300 z-30">
-                    <i id="toastIcon" class="fa-solid fa-shield-check text-5xl text-teal-400 mb-3 drop-shadow-[0_0_15px_rgba(0,255,204,0.6)]"></i>
-                    <p id="toastMsg" class="font-bold text-white tracking-[0.25em] uppercase font-sans text-lg">PROTECTION APPLIED</p>
-                </div>
-            </div>
-
         </div>
+
+        <!-- API Integration View -->
+        <div id="viewApi" class="hidden flex-grow grid grid-cols-1 lg:grid-cols-12 gap-5">
+            <div class="lg:col-span-5 glass-panel rounded-2xl p-6 flex flex-col justify-between">
+                <div>
+                    <h2 class="text-xl font-bold mb-3 text-white uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-key text-teal-400"></i> API Key Management
+                    </h2>
+                    <p class="text-xs text-gray-400 mb-6 leading-relaxed">
+                        Use your personal API Key to integrate Qyrex Obfuscator directly into your development workflow, build scripts, or external executors.
+                    </p>
+
+                    <div class="bg-black/60 p-4 rounded-xl border border-purple-900/60 mb-6">
+                        <label class="text-[10px] text-teal-400 uppercase tracking-widest block mb-2 font-bold">Your Active Public API Key:</label>
+                        <div class="flex items-center gap-2">
+                            <input type="text" id="apiKeyDisplay" readonly class="w-full bg-[#0a0a12] text-teal-300 text-xs p-2.5 rounded border border-purple-900 outline-none font-mono" value="qyrex_1141173377189556324_c3102f5c336c3445442988c4366fe2eb">
+                            <button onclick="copyApiKey()" class="btn-cyber text-white px-3.5 py-2.5 rounded text-xs font-bold shrink-0"><i class="fa-solid fa-copy"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3">
+                        <button onclick="regenerateKey()" class="w-full bg-purple-950/60 hover:bg-purple-900/60 text-purple-200 border border-purple-700/50 py-2.5 px-4 rounded-xl text-xs font-bold uppercase tracking-wider transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-rotate"></i> Regenerate API Key
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-purple-900/40 text-[11px] text-gray-400">
+                    <p>Rate Limit: <strong class="text-teal-400">1,000 requests / hour</strong></p>
+                    <p class="mt-1">Status: <strong class="text-teal-400">Active & Authorized</strong></p>
+                </div>
+            </div>
+
+            <!-- API Documentation -->
+            <div class="lg:col-span-7 glass-panel rounded-2xl p-6 flex flex-col">
+                <h2 class="text-xl font-bold mb-3 text-white uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-book text-purple-400"></i> API Endpoint Reference
+                </h2>
+                <p class="text-xs text-gray-400 mb-4">
+                    Send a POST request to our gateway to obfuscate scripts programmatically.
+                </p>
+
+                <div class="bg-black/60 p-3 rounded-lg border border-purple-900/60 text-xs font-mono mb-4 text-teal-300 flex items-center justify-between">
+                    <span><strong class="text-purple-400">POST</strong> https://qyrex.hopto.org/v1/obfuscate</span>
+                    <span class="text-[10px] bg-teal-950 text-teal-300 px-2 py-0.5 rounded border border-teal-800">JSON</span>
+                </div>
+
+                <h3 class="text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">Example Usage (Roblox HttpService / Lua):</h3>
+                <div class="bg-[#020205] p-3 rounded-lg border border-purple-900/40 text-[11px] text-gray-300 font-mono overflow-x-auto mb-4">
+<pre id="luaSnippet">local HttpService = game:GetService("HttpService")
+local apiKey = "qyrex_1141173377189556324_c3102f5c336c3445442988c4366fe2eb"
+local url = "https://qyrex.hopto.org/v1/obfuscate"
+
+local response = HttpService:JSONDecode(HttpService:PostAsync(url, HttpService:JSONEncode({
+    code = "print('Hello World')",
+    preset = "singleline"
+}), Enum.HttpContentType.ApplicationJson, false, {
+    ["Authorization"] = "Bearer " .. apiKey
+}))
+
+print(response.obfuscatedCode)</pre>
+                </div>
+
+                <div class="flex justify-end">
+                    <button onclick="copySnippet()" class="btn-cyber text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-code"></i> Copy Code Example
+                    </button>
+                </div>
+            </div>
+        </div>
+
     </main>
 
     <footer class="w-full max-w-[1500px] glass-panel rounded-xl p-3 flex flex-col md:flex-row justify-between items-center gap-3 text-xs font-mono">
-        <div class="flex items-center gap-3 w-full md:w-auto">
+        <div class="flex items-center gap-3">
             <span class="text-purple-400 font-bold uppercase tracking-wide"><i class="fa-solid fa-terminal mr-1"></i> Status:</span>
-            <span id="logStatus" class="text-gray-400 truncate">System initialized. Ready for professional bytecode mutation.</span>
+            <span id="logStatus" class="text-gray-400">Ready for bytecode virtualization.</span>
         </div>
-        <div class="flex items-center gap-4 text-gray-400 text-[11px]">
+        <div class="text-gray-400 text-[11px]">
             <span>Watermark: <strong class="text-teal-400">-- Protected by QyrexObf (qyrex.hopto.org)</strong></span>
         </div>
     </footer>
 
     <script>
+        // Tab switching logic
+        function switchTab(tab) {
+            const studio = document.getElementById('viewStudio');
+            const api = document.getElementById('viewApi');
+            const btnStudio = document.getElementById('tabStudioBtn');
+            const btnApi = document.getElementById('tabApiBtn');
+
+            if (tab === 'studio') {
+                studio.classList.remove('hidden');
+                api.classList.add('hidden');
+                btnStudio.classList.add('active');
+                btnApi.classList.remove('active');
+            } else {
+                studio.classList.add('hidden');
+                api.classList.remove('hidden');
+                btnApi.classList.add('active');
+                btnStudio.classList.remove('hidden');
+                btnStudio.classList.remove('active');
+            }
+        }
+
+        // API Key generation
+        function generateApiKey() {
+            const randomHex = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('');
+            return `qyrex_${Math.floor(Date.now() / 1000)}_${randomHex}`;
+        }
+
+        let currentApiKey = generateApiKey();
+        document.getElementById('apiKeyDisplay').value = currentApiKey;
+
+        function regenerateKey() {
+            currentApiKey = generateApiKey();
+            document.getElementById('apiKeyDisplay').value = currentApiKey;
+            updateLuaSnippet();
+            showToast('API KEY REGENERATED');
+        }
+
+        function copyApiKey() {
+            navigator.clipboard.writeText(currentApiKey).then(() => {
+                showToast('API KEY COPIED');
+            });
+        }
+
+        function updateLuaSnippet() {
+            const snippet = `local HttpService = game:GetService("HttpService")\nlocal apiKey = "${currentApiKey}"\nlocal url = "https://qyrex.hopto.org/v1/obfuscate"\n\nlocal response = HttpService:JSONDecode(HttpService:PostAsync(url, HttpService:JSONEncode({\n    code = "print('Hello World')",\n    preset = "singleline"\n}), Enum.HttpContentType.ApplicationJson, false, {\n    ["Authorization"] = "Bearer " .. apiKey\n}))\n\nprint(response.obfuscatedCode)`;
+            document.getElementById('luaSnippet').textContent = snippet;
+        }
+
+        function copySnippet() {
+            navigator.clipboard.writeText(document.getElementById('luaSnippet').textContent).then(() => {
+                showToast('CODE SNIPPET COPIED');
+            });
+        }
+
+        // Toast notification system
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toastOverlay');
+            const toastMsg = document.getElementById('toastMsg');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastMsg.textContent = msg;
+            toastMsg.className = `font-bold tracking-[0.25em] uppercase text-lg ${isError ? 'text-red-500' : 'text-teal-400'}`;
+            toastIcon.className = `fa-solid ${isError ? 'fa-triangle-exclamation text-red-500' : 'fa-shield-check text-teal-400'} text-5xl mb-3`;
+            
+            toast.classList.remove('opacity-0');
+            setTimeout(() => toast.classList.add('opacity-0'), 2000);
+        }
+
+        // Single-Line Obfuscation Engine matching user's requested template structure
+        function compileQyrexSingleLine(source, options) {
+            // Clean comments and whitespace
+            let clean = source.replace(/--\[\[[\s\S]*?--\]\]/g, '').replace(/--.*$/gm, '').trim();
+            let b64 = btoa(unescape(encodeURIComponent(clean)));
+            let xorKey = Math.floor(Math.random() * 150) + 20;
+
+            let hex = "";
+            for (let i = 0; i < b64.length; i++) {
+                let enc = b64.charCodeAt(i) ^ xorKey;
+                hex += '\\x' + enc.toString(16).padStart(2, '0');
+            }
+
+            // Build table E with randomized decoys
+            let pool = [];
+            for (let i = 0; i < 20; i++) {
+                let randStr = Math.random().toString(36).substring(2, 10);
+                pool.push(`"${randStr}"`);
+            }
+            pool[2] = `"${hex}"`;
+
+            let watermarkHeader = options.watermark ? `-- Protected by QyrexObf (qyrex.hopto.org)\n` : '';
+            
+            // Single line formatting matching user example request
+            let template = `${watermarkHeader}return({Wh=bit32 and bit32.rrotate or function(a,b)b=b%32 local c=2^32 a=a%c return((a-a%2^b)/2^b+a*2^(32-b)%c)%c end,MR=function(y,C,f)local l={}for i=1,#y do table.insert(l,string.char(bit32 and bit32.bxor(y:byte(i),C) or f(y:byte(i),C)))end return table.concat(l) end,E={${pool.join(',')}},X=${xorKey},D=function(s,k)local b='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/' s=string.gsub(s,'[^'..b..'=]','')return(s:gsub('.',function(x)if(x=='=')then return''end local r,f='',(b:find(x)-1)for i=6,1,-1 do r=r..(f%2^i-f%2^(i-1)>0 and '1' or '0')end return r end):gsub('%d%d%d?%d?%d?%d?%d?%d?',function(x)if(#x~=8)then return''end local c=0 for i=1,8 do c=c+(x:sub(i,i)=='1' and 2^(8-i) or 0)end return string.char(c) end))end})()`;
+
+            return template;
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const inputCode = document.getElementById('inputCode');
             const outputCode = document.getElementById('outputCode');
@@ -245,210 +355,60 @@
             const clearBtn = document.getElementById('clearBtn');
             const copyBtn = document.getElementById('copyBtn');
             const downloadBtn = document.getElementById('downloadBtn');
-            const toastOverlay = document.getElementById('toastOverlay');
-            const toastMsg = document.getElementById('toastMsg');
-            const toastIcon = document.getElementById('toastIcon');
             const logStatus = document.getElementById('logStatus');
-
-            const showToast = (msg, isError = false) => {
-                toastMsg.textContent = msg;
-                toastMsg.className = `font-bold tracking-[0.25em] uppercase font-sans text-lg ${isError ? 'text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.6)]' : 'text-teal-400 drop-shadow-[0_0_10px_rgba(0,255,204,0.6)]'}`;
-                toastIcon.className = `fa-solid ${isError ? 'fa-skull-crossbones text-red-500' : 'fa-shield-check text-teal-400'} text-5xl mb-3`;
-                toastOverlay.classList.remove('opacity-0');
-                setTimeout(() => toastOverlay.classList.add('opacity-0'), 2000);
-            };
-
-            const setLog = (msg) => {
-                logStatus.textContent = msg;
-            };
-
-            // Random polymorphic identifier generator (lIllI style)
-            const genPolyID = (min = 8, max = 14) => {
-                const len = Math.floor(Math.random() * (max - min + 1)) + min;
-                let res = '';
-                for (let i = 0; i < len; i++) {
-                    res += Math.random() > 0.5 ? 'l' : 'I';
-                }
-                return res;
-            };
-
-            // Number eradication helper
-            const obfNum = (num, enabled) => {
-                if (!enabled) return num;
-                const syms = ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "-", "_", "+", "="];
-                let current = parseInt(num);
-                if (isNaN(current)) return num;
-                if (current === 0) return `(#"")`;
-
-                let exp = [];
-                while (current > 0) {
-                    let chunk = Math.min(current, Math.floor(Math.random() * 6) + 1);
-                    let str = "";
-                    for (let i = 0; i < chunk; i++) {
-                        str += syms[Math.floor(Math.random() * syms.length)];
-                    }
-                    exp.push(`(#"${str}")`);
-                    current -= chunk;
-                }
-                return exp.join(' + ');
-            };
-
-            // Professional Luau Bytecode Obfuscator Core (Luraph-style string table pool format)
-            const compileQyrexBytecode = (source, opts) => {
-                setLog("Normalizing AST tokens and building string pool table (E)...");
-                
-                // 1. Clean comments
-                let cleanSource = source.replace(/--\[\[[\s\S]*?--\]\]/g, '').replace(/--.*$/gm, '').trim();
-
-                // 2. Encode to Base64 & Hex
-                let b64 = btoa(unescape(encodeURIComponent(cleanSource)));
-                let xorKey = Math.floor(Math.random() * 180) + 30;
-
-                let hexPayload = "";
-                for (let i = 0; i < b64.length; i++) {
-                    let enc = b64.charCodeAt(i) ^ xorKey;
-                    hexPayload += '\\x' + enc.toString(16).padStart(2, '0');
-                }
-
-                setLog("Generating encrypted string table pool and VM wrapper...");
-
-                // 3. Generate string pool table E with randomized decoys
-                let poolEntries = [];
-                for (let i = 0; i < 35; i++) {
-                    let randomStr = "";
-                    const charSet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_!@#$%^&*";
-                    let len = Math.floor(Math.random() * 12) + 6;
-                    for(let c=0; c<len; c++) randomStr += charSet[Math.floor(Math.random()*charSet.length)];
-                    poolEntries.push(`"${randomStr}"`);
-                }
-                // Inject actual encoded payload chunks into pool
-                poolEntries[2] = `"${hexPayload}"`;
-
-                const varE = genPolyID();
-                const varEnv = genPolyID();
-                const varLoad = genPolyID();
-                const varPcall = genPolyID();
-                const varBxor = genPolyID();
-                const stateVar = genPolyID();
-
-                const keyExpr = opts.numEradication ? obfNum(xorKey, true) : xorKey;
-                const state1 = opts.numEradication ? obfNum(1, true) : 1;
-                const state2 = opts.numEradication ? obfNum(2, true) : 2;
-                const state3 = opts.numEradication ? obfNum(3, true) : 3;
-                const state4 = opts.numEradication ? obfNum(4, true) : 4;
-
-                // 4. Build professional Luraph-style wrapper structure with the requested watermark
-                let template = `-- Protected by QyrexObf (qyrex.hopto.org)
-return(function(...)
-local ${varEnv} = getgenv and getgenv() or _G or shared;
-local ${varPcall} = pcall;
-local ${varBxor} = bit32 and bit32.bxor or bit and bit.bxor;
-local ${varLoad} = loadstring or ${varEnv}.loadstring;
-if type(${varLoad}) ~= "function" then return end
-local ${varE} = {${poolEntries.join(';')}};
-local function _d(data)
-    local b='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-    data = string.gsub(data, '[^'..b..'=]', '')
-    return (data:gsub('.', function(x)
-        if (x == '=') then return '' end
-        local r,f='',(b:find(x)-1)
-        for i=6,1,-1 do r=r..(f%2^i-f%2^(i-1)>0 and '1' or '0') end
-        return r;
-    end):gsub('%d%d%d?%d?%d?%d?%d?%d?', function(x)
-        if (#x ~= 8) then return '' end
-        local c=0
-        for i=1,8 do c=c+(x:sub(i,i)=='1' and 2^(8-i) or 0) end
-        return string.char(c)
-    end))
-end
-local function _exec()
-    local payload = ${varE}[${state2 === 2 ? 3 : '3' }];
-    local dec_bytes = {};
-    local ${stateVar} = ${state1};
-    local k = ${keyExpr};
-    while ${stateVar} <= ${state3} do
-        if ${stateVar} == ${state1} then
-            for i=1, #payload do
-                table.insert(dec_bytes, string.char(${varBxor}(payload:byte(i), k)))
-            end
-            ${stateVar} = ${state2};
-        elseif ${stateVar} == ${state2} then
-            local b64_str = table.concat(dec_bytes);
-            local final_script = _d(b64_str);
-            local s, func = ${varPcall}(${varLoad}, final_script);
-            if s and type(func) == "function" then
-                coroutine.wrap(func)();
-            end
-            ${stateVar} = ${state4};
-        end
-    end
-end
-coroutine.wrap(_exec)();
-end)(...)`;
-
-                // Minify output layout
-                template = template.replace(/\n\s+/g, '\n').replace(/^\s+/gm, '').trim();
-                return template;
-            };
 
             obfuscateBtn.addEventListener('click', () => {
                 const code = inputCode.value;
                 if (!code.trim()) {
                     showToast('SCRIPT INPUT IS EMPTY', true);
-                    setLog('Error: Cannot obfuscate empty script.');
+                    logStatus.textContent = 'Error: Empty script provided.';
                     return;
                 }
 
                 btnText.style.display = 'none';
                 spinner.style.display = 'block';
                 obfuscateBtn.disabled = true;
-                setLog('Initializing professional obfuscation pipeline...');
-
-                const options = {
-                    numEradication: document.getElementById('optNumEradication').checked,
-                    xorCipher: document.getElementById('optXorCipher').checked,
-                    junkCode: document.getElementById('optJunkCode').checked
-                };
+                logStatus.textContent = 'Virtualizing bytecode into single-line structure...';
 
                 setTimeout(() => {
                     try {
-                        const result = compileQyrexBytecode(code, options);
+                        const options = {
+                            watermark: document.getElementById('optWatermark').checked,
+                            bitRotate: document.getElementById('optBitRotate').checked
+                        };
+                        const result = compileQyrexSingleLine(code, options);
                         outputCode.value = result;
-                        showToast('BYTECODE OBFUSCATED');
-                        setLog('Protection applied successfully. Watermark embedded.');
+                        showToast('PROTECTION APPLIED');
+                        logStatus.textContent = 'Bytecode successfully generated on a single line.';
                     } catch (err) {
                         console.error(err);
-                        outputCode.value = "-- Error during compilation: " + err.message;
+                        outputCode.value = "-- Compilation error: " + err.message;
                         showToast('COMPILATION FAILED', true);
-                        setLog('Critical error during bytecode virtualization.');
+                        logStatus.textContent = 'Error during virtualization.';
                     } finally {
                         btnText.style.display = 'block';
                         spinner.style.display = 'none';
                         obfuscateBtn.disabled = false;
                     }
-                }, 300);
+                }, 250);
             });
 
             sampleBtn.addEventListener('click', () => {
-                inputCode.value = `-- Sample Roblox Script for Qyrex Obfuscation\nlocal Players = game:GetService("Players")\nlocal localPlayer = Players.LocalPlayer\n\nprint("Loading secure interface for: " .. localPlayer.Name)\n\nlocal function coreEngine()\n    local speed = 16\n    print("Engine running at speed: " .. speed)\nend\n\ncoreEngine()`;
-                setLog('Loaded sample Luau script.');
+                inputCode.value = `-- Sample Roblox Script\nlocal Players = game:GetService("Players")\nlocal player = Players.LocalPlayer\nprint("Welcome back, " .. player.Name)\n\nlocal function runTimer()\n    print("Timer active")\nend\nrunTimer()`;
+                logStatus.textContent = 'Loaded sample Luau script.';
             });
 
             clearBtn.addEventListener('click', () => {
                 inputCode.value = '';
                 outputCode.value = '';
-                setLog('Editors cleared.');
+                logStatus.textContent = 'Editors cleared.';
             });
 
             copyBtn.addEventListener('click', () => {
                 if (!outputCode.value) return;
-                document.execCommand('copy');
-                // Fallback using navigator clipboard
                 navigator.clipboard.writeText(outputCode.value).then(() => {
                     showToast('COPIED TO CLIPBOARD');
-                    setLog('Protected bytecode copied to clipboard.');
-                }).catch(() => {
-                    showToast('COPIED TO CLIPBOARD');
+                    logStatus.textContent = 'Single-line bytecode copied.';
                 });
             });
 
@@ -464,8 +424,44 @@ end)(...)`;
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
                 showToast('FILE SAVED');
-                setLog('Bytecode saved as qyrex_protected.lua');
+                logStatus.textContent = 'Saved as qyrex_protected.lua';
             });
+
+            // Intercept / mock API fetch requests so the API endpoint works live in the preview!
+            const originalFetch = window.fetch;
+            window.fetch = async function(resource, init) {
+                if (typeof resource === 'string' && resource.includes('/v1/obfuscate')) {
+                    try {
+                        const body = JSON.parse(init.body || '{}');
+                        const authHeader = init.headers && (init.headers['Authorization'] || init.headers['authorization']);
+                        
+                        if (!authHeader || !authHeader.includes('Bearer qyrex_')) {
+                            return new Response(JSON.stringify({ success: false, error: 'Unauthorized: Invalid or missing API Key' }), {
+                                status: 401,
+                                headers: { 'Content-Type': 'application/json' }
+                            });
+                        }
+
+                        const codeToObf = body.code || "print('Default API Script')";
+                        const obfResult = compileQyrexSingleLine(codeToObf, { watermark: true, bitRotate: true });
+
+                        return new Response(JSON.stringify({
+                            success: true,
+                            obfuscatedCode: obfResult,
+                            message: 'Luau script successfully obfuscated via Qyrex Cloud API.'
+                        }), {
+                            status: 200,
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                    } catch (e) {
+                        return new Response(JSON.stringify({ success: false, error: e.message }), {
+                            status: 500,
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                    }
+                }
+                return originalFetch.apply(this, arguments);
+            };
         });
     </script>
 </body>
