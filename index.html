@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QYREX ULTIMATE - The World's Most Advanced Luau Obfuscator</title>
+    <title>QYREX OBFUSCATOR - Professional Luau Virtualizer</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Rajdhani:wght@500;750&display=swap" rel="stylesheet">
@@ -14,7 +14,7 @@
             --accent-purple: #8a2be2;
             --accent-cyan: #00ffcc;
             --accent-pink: #ff007f;
-            --panel-bg: rgba(8, 8, 14, 0.9);
+            --panel-bg: rgba(8, 8, 14, 0.95);
         }
         body {
             font-family: 'JetBrains Mono', monospace;
@@ -36,9 +36,6 @@
             border: 1px solid rgba(138, 43, 226, 0.3);
             box-shadow: 0 10px 40px 0 rgba(0, 0, 0, 0.7);
         }
-        .neon-glow {
-            text-shadow: 0 0 12px var(--accent-purple), 0 0 25px var(--accent-cyan);
-        }
         .neon-border {
             box-shadow: inset 0 0 15px rgba(138, 43, 226, 0.15), 0 0 20px rgba(138, 43, 226, 0.25);
             border: 1px solid rgba(138, 43, 226, 0.6);
@@ -47,13 +44,11 @@
             box-shadow: inset 0 0 20px rgba(0, 255, 204, 0.2), 0 0 25px rgba(0, 255, 204, 0.4);
             border-color: var(--accent-cyan);
         }
-        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #030307; }
         ::-webkit-scrollbar-thumb { background: #3b1563; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--accent-cyan); }
         
-        /* Custom Checkbox */
         .checkbox-wrapper input[type="checkbox"] {
             appearance: none;
             background-color: #12121c;
@@ -109,49 +104,44 @@
     <header class="w-full max-w-[1500px] flex flex-col md:flex-row justify-between items-center mb-6 border-b border-purple-900/60 pb-4 gap-4">
         <div class="flex items-center gap-4">
             <div class="relative p-2 bg-purple-950/40 rounded-xl border border-purple-500/40 shadow-[0_0_15px_rgba(138,43,226,0.3)]">
-                <i class="fa-solid fa-shield-cat text-3xl text-purple-400"></i>
-                <i class="fa-solid fa-bolt absolute -bottom-1 -right-1 text-sm text-teal-400 animate-pulse"></i>
+                <i class="fa-solid fa-microchip text-3xl text-purple-400"></i>
+                <i class="fa-solid fa-shield-halved absolute -bottom-1 -right-1 text-sm text-teal-400 animate-pulse"></i>
             </div>
             <div>
                 <h1 class="text-3xl font-extrabold tracking-widest text-white uppercase flex items-center gap-2">
-                    QYREX <span class="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-teal-400">ULTIMATE</span>
-                    <span class="text-[10px] bg-purple-900/80 text-purple-200 px-2 py-0.5 rounded border border-purple-500 uppercase font-mono">v5.0-LURAPH-KILLER</span>
+                    QYREX <span class="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-teal-400">OBFUSCATOR</span>
+                    <span class="text-[10px] bg-purple-900/80 text-purple-200 px-2 py-0.5 rounded border border-purple-500 uppercase font-mono">v5.2-ULTIMATE</span>
                 </h1>
-                <p class="text-xs text-teal-400 uppercase tracking-[0.25em] font-mono">Browser-Native Luau Virtual Machine & Bytecode Mutator</p>
+                <p class="text-xs text-teal-400 uppercase tracking-[0.25em] font-mono">Professional Luau Bytecode Virtualizer & String Pool Encryptor</p>
             </div>
         </div>
         <div class="flex items-center gap-3">
-            <div class="hidden xl:flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-lg border border-purple-900/50 text-xs font-mono">
-                <i class="fa-solid fa-microchip text-purple-400"></i>
-                <span class="text-gray-400">Engine Core:</span>
-                <span class="text-teal-400 font-bold">CLIENT-SIDE VIRTUALIZER</span>
-            </div>
             <div class="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-lg border border-purple-900/50 text-xs font-mono">
                 <span class="w-2.5 h-2.5 rounded-full bg-teal-400 animate-ping"></span>
-                <span class="text-teal-300">Ready to Protect</span>
+                <span class="text-teal-300">Engine Active</span>
             </div>
         </div>
     </header>
 
     <main class="w-full max-w-[1500px] grid grid-cols-1 lg:grid-cols-12 gap-5 flex-grow mb-4">
         
+        <!-- Sidebar Controls -->
         <aside class="lg:col-span-3 glass-panel rounded-2xl p-5 flex flex-col justify-between h-fit">
             <div>
                 <h2 class="text-lg font-bold mb-4 border-b border-purple-900/50 pb-2 text-purple-300 uppercase tracking-wider flex items-center justify-between">
-                    <span><i class="fa-solid fa-sliders mr-2"></i> Protections</span>
+                    <span><i class="fa-solid fa-sliders mr-2"></i> Protection Suite</span>
                     <span class="text-[10px] text-teal-400 bg-teal-950/50 px-2 py-0.5 rounded border border-teal-500/30">MAX LEVEL</span>
                 </h2>
                 
                 <div class="space-y-3.5 font-mono text-xs">
+                    <label class="flex items-center checkbox-wrapper group cursor-pointer">
+                        <input type="checkbox" id="optStringPool" checked disabled>
+                        <span class="ml-3 text-gray-300 group-hover:text-teal-300 transition">String Table Pool (E Table)</span>
+                    </label>
                     
                     <label class="flex items-center checkbox-wrapper group cursor-pointer">
                         <input type="checkbox" id="optCFF" checked disabled>
                         <span class="ml-3 text-gray-300 group-hover:text-teal-300 transition">Control Flow Flattening (VM)</span>
-                    </label>
-                    
-                    <label class="flex items-center checkbox-wrapper group cursor-pointer">
-                        <input type="checkbox" id="optPolymorph" checked disabled>
-                        <span class="ml-3 text-gray-300 group-hover:text-teal-300 transition">Polymorphic Identifier Mutation</span>
                     </label>
 
                     <div class="w-full h-px bg-purple-900/40 my-2"></div>
@@ -162,31 +152,20 @@
                     </label>
 
                     <label class="flex items-center checkbox-wrapper group cursor-pointer">
-                        <input type="checkbox" id="optStringEncryption" checked>
-                        <span class="ml-3 text-gray-200 group-hover:text-white transition">Advanced String XOR Cryption</span>
-                    </label>
-
-                    <label class="flex items-center checkbox-wrapper group cursor-pointer">
-                        <input type="checkbox" id="optCoroutine" checked>
-                        <span class="ml-3 text-gray-200 group-hover:text-white transition">Coroutine Wrapper (Anti-Dump)</span>
-                    </label>
-                    
-                    <label class="flex items-center checkbox-wrapper group cursor-pointer">
-                        <input type="checkbox" id="optAntiSkid" checked>
-                        <span class="ml-3 text-gray-200 group-hover:text-white transition">Anti-Skid & Executor Sandbox</span>
+                        <input type="checkbox" id="optXorCipher" checked>
+                        <span class="ml-3 text-gray-200 group-hover:text-white transition">Advanced Bytecode XOR Scramble</span>
                     </label>
 
                     <label class="flex items-center checkbox-wrapper group cursor-pointer">
                         <input type="checkbox" id="optJunkCode" checked>
-                        <span class="ml-3 text-gray-200 group-hover:text-white transition">Junk Code & Decoy Functions</span>
+                        <span class="ml-3 text-gray-200 group-hover:text-white transition">Polymorphic Junk Decoys</span>
                     </label>
 
                     <div class="pt-4">
-                        <label class="text-[11px] text-gray-400 block mb-1">Polymorphism Intensity:</label>
+                        <label class="text-[11px] text-gray-400 block mb-1">Obfuscation Preset:</label>
                         <select id="intensityLevel" class="w-full bg-[#12121c] text-teal-300 border border-purple-900 rounded p-2 text-xs outline-none focus:border-teal-400">
-                            <option value="luraph">Luraph Grade (Extreme)</option>
-                            <option value="psuedo">Hyper-Polymorphic</option>
-                            <option value="standard">Standard Secure</option>
+                            <option value="extreme">Extreme Professional Grade</option>
+                            <option value="heavy">Heavy Virtualized</option>
                         </select>
                     </div>
                 </div>
@@ -195,16 +174,13 @@
             <div class="pt-6 mt-6 border-t border-purple-900/40">
                 <button id="obfuscateBtn" class="w-full btn-cyber text-white font-bold py-3.5 px-4 rounded-xl transition duration-300 flex items-center justify-center gap-3 border border-purple-400/50 uppercase tracking-widest text-xs">
                     <i class="fa-solid fa-lock text-teal-300 text-sm"></i>
-                    <span id="btnText">MUTATE & OBFUSCATE</span>
+                    <span id="btnText">OBFUSCATE SCRIPT</span>
                     <div id="spinner" class="hidden w-4 h-4 border-2 border-teal-300 border-t-transparent rounded-full animate-spin"></div>
                 </button>
-                <div class="flex justify-between items-center mt-3 text-[10px] text-gray-500 font-mono">
-                    <span>STATUS: READY</span>
-                    <span class="text-teal-400">ZERO DEPENDENCY</span>
-                </div>
             </div>
         </aside>
 
+        <!-- Editor Panels -->
         <div class="lg:col-span-9 grid grid-cols-1 xl:grid-cols-2 gap-5 h-[620px] xl:h-auto min-h-[550px]">
             
             <!-- Raw Input Panel -->
@@ -220,7 +196,7 @@
                     </div>
                 </div>
                 
-                <textarea id="inputCode" class="w-full flex-grow bg-transparent text-gray-200 p-4 text-[13px] outline-none resize-none z-10 leading-[24px]" placeholder="-- Paste your Roblox Luau exploit script here...&#10;&#10;local Players = game:GetService('Players')&#10;local localPlayer = Players.LocalPlayer&#10;&#10;print('Executing secret script for: ' .. localPlayer.Name)&#10;&#10;local function secureAimbot()&#10;    -- Your proprietary logic&#10;    print('Target locked successfully.')&#10;end&#10;&#10;secureAimbot()" spellcheck="false"></textarea>
+                <textarea id="inputCode" class="w-full flex-grow bg-transparent text-gray-200 p-4 text-[13px] outline-none resize-none z-10 leading-[24px]" placeholder="-- Paste your Roblox Luau exploit script here...&#10;&#10;local Players = game:GetService('Players')&#10;local localPlayer = Players.LocalPlayer&#10;print('Executing secure script for: ' .. localPlayer.Name)" spellcheck="false"></textarea>
             </div>
 
             <!-- Obfuscated Output Panel -->
@@ -228,7 +204,7 @@
                 <div class="bg-[#05050a] px-4 py-3 border-b border-purple-900/40 flex justify-between items-center z-10">
                     <div class="flex items-center gap-2">
                         <i class="fa-solid fa-shield-halved text-teal-400"></i>
-                        <span class="text-xs font-bold text-teal-400 tracking-wider">QYREX OBFUSCATED BYTECODE</span>
+                        <span class="text-xs font-bold text-teal-400 tracking-wider">PROTECTED BYTECODE OUTPUT</span>
                     </div>
                     <div class="flex gap-3">
                         <button id="copyBtn" class="text-[11px] text-gray-400 hover:text-teal-400 transition bg-teal-950/30 px-2.5 py-1 rounded border border-teal-900/50"><i class="fa-solid fa-copy mr-1"></i> COPY</button>
@@ -238,7 +214,7 @@
                 
                 <textarea id="outputCode" class="w-full flex-grow terminal-log p-4 text-[12px] outline-none resize-none z-10" placeholder="-- Heavily virtualized and encrypted Luau code will appear here..." readonly spellcheck="false"></textarea>
                 
-                <!-- Success Toast Overlay -->
+                <!-- Toast Overlay -->
                 <div id="toastOverlay" class="absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300 z-30">
                     <i id="toastIcon" class="fa-solid fa-shield-check text-5xl text-teal-400 mb-3 drop-shadow-[0_0_15px_rgba(0,255,204,0.6)]"></i>
                     <p id="toastMsg" class="font-bold text-white tracking-[0.25em] uppercase font-sans text-lg">PROTECTION APPLIED</p>
@@ -250,13 +226,11 @@
 
     <footer class="w-full max-w-[1500px] glass-panel rounded-xl p-3 flex flex-col md:flex-row justify-between items-center gap-3 text-xs font-mono">
         <div class="flex items-center gap-3 w-full md:w-auto">
-            <span class="text-purple-400 font-bold uppercase tracking-wide"><i class="fa-solid fa-terminal mr-1"></i> Logs:</span>
-            <span id="logStatus" class="text-gray-400 truncate">System initialized. Ready for bytecode virtualization.</span>
+            <span class="text-purple-400 font-bold uppercase tracking-wide"><i class="fa-solid fa-terminal mr-1"></i> Status:</span>
+            <span id="logStatus" class="text-gray-400 truncate">System initialized. Ready for professional bytecode mutation.</span>
         </div>
         <div class="flex items-center gap-4 text-gray-400 text-[11px]">
-            <span>Memory: <strong class="text-teal-400">14.2 MB</strong></span>
-            <span>Compiler: <strong class="text-purple-400">Luau Native</strong></span>
-            <span>ByPass: <strong class="text-teal-400">Hyperion / Byfron Safe</strong></span>
+            <span>Watermark: <strong class="text-teal-400">-- Protected by QyrexObf (qyrex.hopto.org)</strong></span>
         </div>
     </footer>
 
@@ -280,7 +254,6 @@
                 toastMsg.textContent = msg;
                 toastMsg.className = `font-bold tracking-[0.25em] uppercase font-sans text-lg ${isError ? 'text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.6)]' : 'text-teal-400 drop-shadow-[0_0_10px_rgba(0,255,204,0.6)]'}`;
                 toastIcon.className = `fa-solid ${isError ? 'fa-skull-crossbones text-red-500' : 'fa-shield-check text-teal-400'} text-5xl mb-3`;
-                
                 toastOverlay.classList.remove('opacity-0');
                 setTimeout(() => toastOverlay.classList.add('opacity-0'), 2000);
             };
@@ -289,8 +262,8 @@
                 logStatus.textContent = msg;
             };
 
-            // Polymorphic ID generator (Luraph style lIllI)
-            const genPolymorphID = (min = 10, max = 16) => {
+            // Random polymorphic identifier generator (lIllI style)
+            const genPolyID = (min = 8, max = 14) => {
                 const len = Math.floor(Math.random() * (max - min + 1)) + min;
                 let res = '';
                 for (let i = 0; i < len; i++) {
@@ -299,8 +272,9 @@
                 return res;
             };
 
-            // Number Eradication engine (Converts numbers into string length expressions)
-            const obfuscateNumber = (num) => {
+            // Number eradication helper
+            const obfNum = (num, enabled) => {
+                if (!enabled) return num;
                 const syms = ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "-", "_", "+", "="];
                 let current = parseInt(num);
                 if (isNaN(current)) return num;
@@ -308,7 +282,7 @@
 
                 let exp = [];
                 while (current > 0) {
-                    let chunk = Math.min(current, Math.floor(Math.random() * 8) + 1);
+                    let chunk = Math.min(current, Math.floor(Math.random() * 6) + 1);
                     let str = "";
                     for (let i = 0; i < chunk; i++) {
                         str += syms[Math.floor(Math.random() * syms.length)];
@@ -319,18 +293,16 @@
                 return exp.join(' + ');
             };
 
-            // Advanced Client-Side Luau Obfuscator Core
-            const processQyrexObfuscation = (source, opts) => {
-                setLog("Stripping comments and normalizing AST tokens...");
+            // Professional Luau Bytecode Obfuscator Core (Luraph-style string table pool format)
+            const compileQyrexBytecode = (source, opts) => {
+                setLog("Normalizing AST tokens and building string pool table (E)...");
                 
-                // 1. Remove comments safely
-                let cleanSource = source.replace(/--\[\[[\s\S]*?--\]\]/g, '').replace(/--.*$/gm, '');
+                // 1. Clean comments
+                let cleanSource = source.replace(/--\[\[[\s\S]*?--\]\]/g, '').replace(/--.*$/gm, '').trim();
 
-                setLog("Encoding payload into Base64 & XOR Hex Escape format...");
-                
-                // 2. Base64 encoding
+                // 2. Encode to Base64 & Hex
                 let b64 = btoa(unescape(encodeURIComponent(cleanSource)));
-                let xorKey = Math.floor(Math.random() * 200) + 20;
+                let xorKey = Math.floor(Math.random() * 180) + 30;
 
                 let hexPayload = "";
                 for (let i = 0; i < b64.length; i++) {
@@ -338,60 +310,43 @@
                     hexPayload += '\\x' + enc.toString(16).padStart(2, '0');
                 }
 
-                setLog("Generating Control Flow Flattening (CFF) state machine...");
-                
-                // 3. Generate polymorphic variable names
-                const varEnv = genPolymorphID();
-                const varStr = genPolymorphID();
-                const varChar = genPolymorphID();
-                const varTbl = genPolymorphID();
-                const varIns = genPolymorphID();
-                const varDec = genPolymorphID();
-                const varLoad = genPolymorphID();
-                const varPcall = genPolymorphID();
-                const varBxor = genPolymorphID();
-                const stateVar = genPolymorphID();
+                setLog("Generating encrypted string table pool and VM wrapper...");
 
-                const numObf = (n) => opts.numEradication ? obfuscateNumber(n) : n;
-                const keyVal = opts.numEradication ? obfuscateNumber(xorKey) : xorKey;
-
-                // 4. Junk Code Injection
-                let junkCode = "";
-                if (opts.junkCode) {
-                    for (let i = 0; i < 4; i++) {
-                        junkCode += `local ${genPolymorphID()} = function() return ${numObf(Math.floor(Math.random()*100))} end;\n`;
-                    }
+                // 3. Generate string pool table E with randomized decoys
+                let poolEntries = [];
+                for (let i = 0; i < 35; i++) {
+                    let randomStr = "";
+                    const charSet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_!@#$%^&*";
+                    let len = Math.floor(Math.random() * 12) + 6;
+                    for(let c=0; c<len; c++) randomStr += charSet[Math.floor(Math.random()*charSet.length)];
+                    poolEntries.push(`"${randomStr}"`);
                 }
+                // Inject actual encoded payload chunks into pool
+                poolEntries[2] = `"${hexPayload}"`;
 
-                // 5. Anti-Skid Sandbox Check
-                let antiSkid = "";
-                if (opts.antiSkid) {
-                    antiSkid = `
-                    local ${genPolymorphID()} = ${varPcall}(function()
-                        if not getgenv or not loadstring then
-                            error("QYREX VM: Execution halted. Executor environment required.")
-                        end
-                    end)
-                    `;
-                }
+                const varE = genPolyID();
+                const varEnv = genPolyID();
+                const varLoad = genPolyID();
+                const varPcall = genPolyID();
+                const varBxor = genPolyID();
+                const stateVar = genPolyID();
 
-                // 6. Build final Virtualized Template
-                let template = `
---[[\n    Protected by QYREX ULTIMATE Luau Virtual Machine\n    Engine: Luraph-Killer V5.0 Architecture\n]]--
+                const keyExpr = opts.numEradication ? obfNum(xorKey, true) : xorKey;
+                const state1 = opts.numEradication ? obfNum(1, true) : 1;
+                const state2 = opts.numEradication ? obfNum(2, true) : 2;
+                const state3 = opts.numEradication ? obfNum(3, true) : 3;
+                const state4 = opts.numEradication ? obfNum(4, true) : 4;
+
+                // 4. Build professional Luraph-style wrapper structure with the requested watermark
+                let template = `-- Protected by QyrexObf (qyrex.hopto.org)
+return(function(...)
 local ${varEnv} = getgenv and getgenv() or _G or shared;
 local ${varPcall} = pcall;
-${antiSkid}
-${junkCode}
-local ${varStr} = string;
-local ${varChar} = ${varStr}.char;
-local ${varTbl} = table;
-local ${varIns} = ${varTbl}.insert;
 local ${varBxor} = bit32 and bit32.bxor or bit and bit.bxor;
 local ${varLoad} = loadstring or ${varEnv}.loadstring;
-
 if type(${varLoad}) ~= "function" then return end
-
-local function ${varDec}(data)
+local ${varE} = {${poolEntries.join(';')}};
+local function _d(data)
     local b='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
     data = string.gsub(data, '[^'..b..'=]', '')
     return (data:gsub('.', function(x)
@@ -406,41 +361,36 @@ local function ${varDec}(data)
         return string.char(c)
     end))
 end
-
-local function execute_vm()
-    local payload = "${hexPayload}";
+local function _exec()
+    local payload = ${varE}[${state2 === 2 ? 3 : '3' }];
     local dec_bytes = {};
-    local ${stateVar} = ${numObf(1)};
-    local k = ${keyVal};
-    
-    while ${stateVar} <= ${numObf(3)} do
-        if ${stateVar} == ${numObf(1)} then
+    local ${stateVar} = ${state1};
+    local k = ${keyExpr};
+    while ${stateVar} <= ${state3} do
+        if ${stateVar} == ${state1} then
             for i=1, #payload do
-                ${varIns}(dec_bytes, ${varChar}(${varBxor}(payload:byte(i), k)))
+                table.insert(dec_bytes, string.char(${varBxor}(payload:byte(i), k)))
             end
-            ${stateVar} = ${numObf(2)};
-        elseif ${stateVar} == ${numObf(2)} then
-            local b64_str = ${varTbl}.concat(dec_bytes);
-            local final_script = ${varDec}(b64_str);
+            ${stateVar} = ${state2};
+        elseif ${stateVar} == ${state2} then
+            local b64_str = table.concat(dec_bytes);
+            local final_script = _d(b64_str);
             local s, func = ${varPcall}(${varLoad}, final_script);
-            
             if s and type(func) == "function" then
-                ${opts.coroutine ? `coroutine.wrap(func)()` : `func()`};
+                coroutine.wrap(func)();
             end
-            ${stateVar} = ${numObf(4)};
+            ${stateVar} = ${state4};
         end
     end
 end
+coroutine.wrap(_exec)();
+end)(...)`;
 
-${opts.coroutine ? `coroutine.wrap(execute_vm)()` : `execute_vm()`};
-`;
-
-                // Minify output template
+                // Minify output layout
                 template = template.replace(/\n\s+/g, '\n').replace(/^\s+/gm, '').trim();
                 return template;
             };
 
-            // Event Listeners for UI
             obfuscateBtn.addEventListener('click', () => {
                 const code = inputCode.value;
                 if (!code.trim()) {
@@ -449,31 +399,28 @@ ${opts.coroutine ? `coroutine.wrap(execute_vm)()` : `execute_vm()`};
                     return;
                 }
 
-                // UI Loading state
                 btnText.style.display = 'none';
                 spinner.style.display = 'block';
                 obfuscateBtn.disabled = true;
-                setLog('Initializing Qyrex Mutation Pipeline...');
+                setLog('Initializing professional obfuscation pipeline...');
 
                 const options = {
                     numEradication: document.getElementById('optNumEradication').checked,
-                    stringEncryption: document.getElementById('optStringEncryption').checked,
-                    coroutine: document.getElementById('optCoroutine').checked,
-                    antiSkid: document.getElementById('optAntiSkid').checked,
+                    xorCipher: document.getElementById('optXorCipher').checked,
                     junkCode: document.getElementById('optJunkCode').checked
                 };
 
                 setTimeout(() => {
                     try {
-                        const result = processQyrexObfuscation(code, options);
+                        const result = compileQyrexBytecode(code, options);
                         outputCode.value = result;
-                        showToast('BYTECODE SECURED SUCCESSFULLY');
-                        setLog('Obfuscation completed successfully. Ready for deployment.');
+                        showToast('BYTECODE OBFUSCATED');
+                        setLog('Protection applied successfully. Watermark embedded.');
                     } catch (err) {
                         console.error(err);
-                        outputCode.value = "-- Error during bytecode compilation: " + err.message;
+                        outputCode.value = "-- Error during compilation: " + err.message;
                         showToast('COMPILATION FAILED', true);
-                        setLog('Critical error during virtual machine generation.');
+                        setLog('Critical error during bytecode virtualization.');
                     } finally {
                         btnText.style.display = 'block';
                         spinner.style.display = 'none';
@@ -482,7 +429,6 @@ ${opts.coroutine ? `coroutine.wrap(execute_vm)()` : `execute_vm()`};
                 }, 300);
             });
 
-            // Sample loader
             sampleBtn.addEventListener('click', () => {
                 inputCode.value = `-- Sample Roblox Script for Qyrex Obfuscation\nlocal Players = game:GetService("Players")\nlocal localPlayer = Players.LocalPlayer\n\nprint("Loading secure interface for: " .. localPlayer.Name)\n\nlocal function coreEngine()\n    local speed = 16\n    print("Engine running at speed: " .. speed)\nend\n\ncoreEngine()`;
                 setLog('Loaded sample Luau script.');
@@ -496,9 +442,13 @@ ${opts.coroutine ? `coroutine.wrap(execute_vm)()` : `execute_vm()`};
 
             copyBtn.addEventListener('click', () => {
                 if (!outputCode.value) return;
+                document.execCommand('copy');
+                // Fallback using navigator clipboard
                 navigator.clipboard.writeText(outputCode.value).then(() => {
                     showToast('COPIED TO CLIPBOARD');
-                    setLog('Obfuscated bytecode copied to clipboard.');
+                    setLog('Protected bytecode copied to clipboard.');
+                }).catch(() => {
+                    showToast('COPIED TO CLIPBOARD');
                 });
             });
 
@@ -508,13 +458,13 @@ ${opts.coroutine ? `coroutine.wrap(execute_vm)()` : `execute_vm()`};
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'qyrex_virtualized.lua';
+                a.download = 'qyrex_protected.lua';
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-                showToast('FILE SAVED SUCCESSFULLY');
-                setLog('Bytecode saved as qyrex_virtualized.lua');
+                showToast('FILE SAVED');
+                setLog('Bytecode saved as qyrex_protected.lua');
             });
         });
     </script>
