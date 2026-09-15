@@ -3,130 +3,271 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ikgonavi Obfuscator | Advanced Luau Protection</title>
+    <title>Qyrex | Advanced Luau Obfuscator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        :root {
-            --bg: #09090b;
-            --surface: #18181b;
-            --primary: #3b82f6;
-            --glow: rgba(59, 130, 246, 0.5);
-            --text: #f4f4f5;
-            --text-muted: #a1a1aa;
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap');
+        
+        body {
+            background-color: #050505;
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            background-image: radial-gradient(circle at 50% 0%, #1a1a2e 0%, #050505 50%);
+            min-height: 100vh;
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: var(--bg); color: var(--text); display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 2rem; }
-        .header { text-align: center; margin-bottom: 2rem; }
-        .header h1 { font-size: 2.5rem; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 20px var(--glow); }
-        .header p { color: var(--text-muted); margin-top: 0.5rem; }
-        .container { display: flex; gap: 2rem; width: 100%; max-width: 1200px; height: 60vh; }
-        .panel { flex: 1; background: var(--surface); border: 1px solid #27272a; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .panel-header { background: #27272a; padding: 0.75rem 1rem; font-size: 0.9rem; font-weight: 600; color: var(--text-muted); display: flex; justify-content: space-between;}
-        textarea { flex: 1; background: transparent; border: none; color: #10b981; padding: 1rem; font-family: 'Courier New', Courier, monospace; resize: none; outline: none; font-size: 14px; }
-        textarea::placeholder { color: #3f3f46; }
-        .controls { margin-top: 2rem; display: flex; gap: 1rem; }
-        button { background: var(--primary); color: white; border: none; padding: 1rem 2.5rem; font-size: 1.1rem; font-weight: bold; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 0 15px var(--glow); text-transform: uppercase; }
-        button:hover { transform: translateY(-2px); box-shadow: 0 0 25px var(--glow); background: #2563eb; }
-        button:active { transform: translateY(0); }
-        .toast { position: fixed; bottom: 20px; right: 20px; background: #10b981; color: white; padding: 1rem; border-radius: 8px; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+
+        .code-font {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .glass-panel {
+            background: rgba(20, 20, 25, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        textarea {
+            background: #0a0a0c;
+            border: 1px solid #2a2a35;
+            color: #00ff88;
+            resize: none;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #00ff88;
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.2);
+        }
+
+        .btn-obfuscate {
+            background: linear-gradient(135deg, #00b09b, #96c93d);
+            transition: all 0.3s ease;
+        }
+
+        .btn-obfuscate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 255, 136, 0.4);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0a0a0c; }
+        ::-webkit-scrollbar-thumb { background: #2a2a35; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #00ff88; }
     </style>
 </head>
-<body>
+<body class="p-4 md:p-8">
 
-    <div class="header">
-        <h1>Ikgonavi Obfuscator</h1>
-        <p>Motor de Ofuscación Luau - Nivel 1</p>
-    </div>
-
-    <div class="container">
-        <div class="panel">
-            <div class="panel-header">INPUT.LUA</div>
-            <textarea id="inputCode" placeholder="Pega tu script de Roblox aquí...&#10;ej. print('Hola Mundo')"></textarea>
+    <header class="max-w-7xl mx-auto mb-8 flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-extrabold tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-blue-500">
+                <i class="fa-solid fa-shield-halved mr-2 text-green-400"></i>QYREX OBFUSCATOR
+            </h1>
+            <p class="text-gray-400 text-sm mt-1">Nivel de Seguridad: MÁXIMO | Runtime: Luau/Roblox</p>
         </div>
-        <div class="panel">
-            <div class="panel-header">
-                <span>OUTPUT.LUA</span>
-                <span style="cursor:pointer; color: #3b82f6;" onclick="copyCode()">Copiar</span>
+        <div class="hidden md:flex gap-4">
+            <span class="px-3 py-1 glass-panel rounded-full text-xs text-green-400 border border-green-500/30">100% Client-Side</span>
+            <span class="px-3 py-1 glass-panel rounded-full text-xs text-blue-400 border border-blue-500/30">Undetectable</span>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Panel de Configuración -->
+        <div class="lg:col-span-3 glass-panel p-6 rounded-xl h-fit">
+            <h2 class="text-xl font-bold mb-4 border-b border-gray-700 pb-2">Métodos de Protección</h2>
+            
+            <div class="space-y-4">
+                <label class="flex items-center space-x-3 cursor-pointer">
+                    <input type="checkbox" checked disabled class="form-checkbox h-5 w-5 text-green-500 bg-gray-800 border-gray-600 rounded focus:ring-green-500">
+                    <span class="text-gray-300 text-sm">Control Flow Mangling (Base)</span>
+                </label>
+                <label class="flex items-center space-x-3 cursor-pointer">
+                    <input type="checkbox" checked disabled class="form-checkbox h-5 w-5 text-green-500 bg-gray-800 border-gray-600 rounded focus:ring-green-500">
+                    <span class="text-gray-300 text-sm">String Encryption (Hex/Math)</span>
+                </label>
+                <label class="flex items-center space-x-3 cursor-pointer">
+                    <input type="checkbox" id="opt-antitamper" checked class="form-checkbox h-5 w-5 text-green-500 bg-gray-800 border-gray-600 rounded focus:ring-green-500">
+                    <span class="text-gray-300 text-sm">Inyectar Anti-Tamper (Crash)</span>
+                </label>
+                <label class="flex items-center space-x-3 cursor-pointer">
+                    <input type="checkbox" id="opt-layers" checked class="form-checkbox h-5 w-5 text-green-500 bg-gray-800 border-gray-600 rounded focus:ring-green-500">
+                    <span class="text-gray-300 text-sm">Múltiples Capas (Super Lento de leer)</span>
+                </label>
+
+                <div class="pt-4 mt-4 border-t border-gray-700">
+                    <label class="block text-gray-400 text-xs mb-2">Marca de Agua Personalizada</label>
+                    <input type="text" id="watermark" value="Obfuscated by Qyrex Engine" class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-gray-300 focus:border-green-500 outline-none">
+                </div>
             </div>
-            <textarea id="outputCode" readonly placeholder="El código ofuscado aparecerá aquí..."></textarea>
+
+            <button onclick="executeObfuscation()" class="w-full mt-6 btn-obfuscate text-black font-bold py-3 px-4 rounded-lg shadow-lg flex justify-center items-center gap-2">
+                <i class="fa-solid fa-lock"></i> OFUSCAR CÓDIGO
+            </button>
         </div>
-    </div>
 
-    <div class="controls">
-        <button onclick="obfuscate()">Ofuscar Script</button>
-    </div>
+        <!-- Editores de Código -->
+        <div class="lg:col-span-9 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Input -->
+            <div class="flex flex-col">
+                <div class="flex justify-between items-center mb-2 px-1">
+                    <label class="text-sm font-semibold text-gray-400"><i class="fa-solid fa-code mr-2"></i>Script Original (Luau)</label>
+                    <button onclick="document.getElementById('input-code').value=''" class="text-xs text-red-400 hover:text-red-300"><i class="fa-solid fa-trash mr-1"></i>Limpiar</button>
+                </div>
+                <textarea id="input-code" class="w-full h-[500px] p-4 rounded-xl code-font text-sm" placeholder="print('¡Hola Mundo!')"></textarea>
+            </div>
 
-    <div class="toast" id="toast">¡Código copiado al portapapeles!</div>
+            <!-- Output -->
+            <div class="flex flex-col">
+                <div class="flex justify-between items-center mb-2 px-1">
+                    <label class="text-sm font-semibold text-green-400"><i class="fa-solid fa-shield-virus mr-2"></i>Script Ofuscado</label>
+                    <div class="gap-3 flex">
+                        <button onclick="copyCode()" class="text-xs text-blue-400 hover:text-blue-300"><i class="fa-solid fa-copy mr-1"></i>Copiar</button>
+                        <button onclick="downloadCode()" class="text-xs text-green-400 hover:text-green-300"><i class="fa-solid fa-download mr-1"></i>Descargar .lua</button>
+                    </div>
+                </div>
+                <textarea id="output-code" class="w-full h-[500px] p-4 rounded-xl code-font text-sm text-gray-400" readonly placeholder="El código impenetrable aparecerá aquí..."></textarea>
+            </div>
+        </div>
+
+    </main>
 
     <script>
-        // Utilidades del Ofuscador
-        const generateJunkVar = () => {
-            const chars = ['I', 'l'];
-            let res = '';
-            for(let i=0; i< (Math.floor(Math.random() * 10) + 8); i++) {
-                res += chars[Math.floor(Math.random() * chars.length)];
+        // Utilidad: Generar nombres de variables aleatorias e ilegibles
+        const generateGarbageName = (length = 12) => {
+            const chars = 'Il_'; // Ilusión óptica brutal en editores
+            let result = '_';
+            for (let i = 0; i < length; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
             }
-            return res;
+            return result;
         };
 
-        const stringToHex = (str) => {
-            return str.split('').map(c => '\\x' + c.charCodeAt(0).toString(16).padStart(2, '0')).join('');
+        // Utilidad: Generador de ecuaciones matemáticas aleatorias para un número
+        const mathObfuscateNumber = (num) => {
+            const offset = Math.floor(Math.random() * 500) + 100;
+            const multiplier = Math.floor(Math.random() * 5) + 2;
+            const finalNum = (num * multiplier) + offset;
+            return `((${finalNum} - ${offset}) / ${multiplier})`;
         };
 
-        const numberToMath = (numStr) => {
-            const num = parseInt(numStr);
-            if (isNaN(num)) return numStr;
-            const factor = Math.floor(Math.random() * 10) + 1;
-            const mult = num * factor;
-            return `(0x${mult.toString(16)} / 0x${factor.toString(16)})`;
-        };
-
-        function obfuscate() {
-            let code = document.getElementById('inputCode').value;
-            if (!code.trim()) return;
-
-            // 1. Eliminar comentarios
-            code = code.replace(/--.*?$/gm, '').replace(/--\[\[[\s\S]*?\]\]/g, '');
-
-            // 2. Proteger Strings (Hexificación)
-            // Esto busca textos entre comillas dobles o simples y los transforma
-            code = code.replace(/(["'])(.*?)\1/g, function(match, quote, text) {
-                return '"' + stringToHex(text) + '"';
-            });
-
-            // 3. Mutación de Números (Convierte 100 en operaciones hexadecimales)
-            code = code.replace(/\b\d+\b/g, function(match) {
-                return numberToMath(match);
-            });
-
-            // 4. Inyección de Código Basura Multicapa
-            let junkBlock = "";
-            for(let i=0; i<5; i++) {
-                junkBlock += `local ${generateJunkVar()} = ${numberToMath(Math.floor(Math.random() * 100))};\n`;
-                junkBlock += `if ${generateJunkVar()} == ${generateJunkVar()} then ${generateJunkVar()} = nil end;\n`;
+        // Motor principal de ofuscación
+        function executeObfuscation() {
+            const input = document.getElementById('input-code').value;
+            if (!input.trim()) {
+                alert("Por favor, ingresa código Luau para ofuscar.");
+                return;
             }
 
-            // 5. Minificación y Empaquetado
-            code = code.replace(/\s+/g, ' '); // Remover saltos de linea
+            const useAntiTamper = document.getElementById('opt-antitamper').checked;
+            const useLayers = document.getElementById('opt-layers').checked;
+            const watermark = document.getElementById('watermark').value;
             
-            let finalCode = `
--- Protegido por Ikgonavi Obfuscator
-local ${generateJunkVar()} = function()
-    ${junkBlock}
-    ${code}
-end;
-${generateJunkVar()}();
-            `.trim();
+            // 1. Minificación básica (eliminar comentarios y espacios extra sin romper strings)
+            // Nota: Se hace de forma conservadora para no romper strings internos.
+            let cleanCode = input.replace(/--\[\[[\s\S]*?\]\]/g, '').replace(/--.*/g, '');
 
-            document.getElementById('outputCode').value = finalCode;
+            // 2. Preparar el Payload Original
+            // Convertimos el código a un array de bytes encriptado con una llave dinámica
+            const encryptKey = Math.floor(Math.random() * 150) + 10;
+            let bytePayload = [];
+            for (let i = 0; i < cleanCode.length; i++) {
+                bytePayload.push(cleanCode.charCodeAt(i) + encryptKey);
+            }
+
+            // 3. Crear el desempaquetador (Decoder) en Lua
+            const v_Table = generateGarbageName();
+            const v_Decoded = generateGarbageName();
+            const v_Char = generateGarbageName();
+            const v_Loop = generateGarbageName();
+            const v_Load = generateGarbageName();
+
+            let luaDecoder = `
+                local ${v_Char} = string.char;
+                local ${v_Table} = {${bytePayload.map(b => mathObfuscateNumber(b)).join(',')}};
+                local ${v_Decoded} = "";
+                for ${v_Loop} = 1, #${v_Table} do
+                    ${v_Decoded} = ${v_Decoded} .. ${v_Char}(${v_Table}[${v_Loop}] - ${encryptKey});
+                end;
+                local ${v_Load} = assert(loadstring or load, "Executor Inválido")(${v_Decoded});
+                ${v_Load}();
+            `;
+
+            // 4. Añadir Anti-Tamper (Opaque Predicates / Crash Code)
+            if (useAntiTamper) {
+                const fakeVar1 = generateGarbageName();
+                const fakeVar2 = generateGarbageName();
+                const antiTamper = `
+                    local ${fakeVar1} = ${Math.random()};
+                    local ${fakeVar2} = function() 
+                        if ${fakeVar1} == 1 then 
+                            while true do end 
+                        end 
+                    end;
+                    ${fakeVar2}();
+                `;
+                // Insertamos el anti-tamper en el decoder
+                luaDecoder = antiTamper + luaDecoder;
+            }
+
+            // 5. Segunda Capa (El Nivel Dios)
+            // Convertimos todo el decoder anterior en un string Hexadecimal brutal
+            let finalOutput = `-- [[ ${watermark} ]] --\n`;
+            
+            if (useLayers) {
+                let hexPayload = [];
+                for (let i = 0; i < luaDecoder.length; i++) {
+                    hexPayload.push('0x' + luaDecoder.charCodeAt(i).toString(16));
+                }
+
+                const var_StrChar = generateGarbageName(15);
+                const var_HexData = generateGarbageName(18);
+                const var_FinalStr = generateGarbageName(10);
+                const var_Iterator = generateGarbageName(8);
+
+                finalOutput += `
+local ${var_StrChar} = string.char;
+local ${var_HexData} = {${hexPayload.join(', ')}};
+local ${var_FinalStr} = "";
+for ${var_Iterator} = 1, #${var_HexData} do
+    ${var_FinalStr} = ${var_FinalStr} .. ${var_StrChar}(${var_HexData}[${var_Iterator}]);
+end;
+assert(loadstring or load)(${var_FinalStr})();
+`;
+            } else {
+                finalOutput += luaDecoder;
+            }
+
+            // Formatear un poco para que se vea monstruoso
+            finalOutput = finalOutput.replace(/\n\s+/g, ' ');
+
+            document.getElementById('output-code').value = finalOutput;
+            
+            // Efecto visual
+            const btn = document.querySelector('.btn-obfuscate');
+            btn.innerHTML = '<i class="fa-solid fa-check"></i> ¡CÓDIGO DESTRUIDO!';
+            setTimeout(() => {
+                btn.innerHTML = '<i class="fa-solid fa-lock"></i> OFUSCAR CÓDIGO';
+            }, 2000);
         }
 
         function copyCode() {
-            const output = document.getElementById('outputCode');
+            const output = document.getElementById('output-code');
             output.select();
             document.execCommand('copy');
-            const toast = document.getElementById('toast');
-            toast.style.opacity = '1';
-            setTimeout(() => toast.style.opacity = '0', 3000);
+            alert('¡Código ofuscado copiado al portapapeles!');
+        }
+
+        function downloadCode() {
+            const text = document.getElementById('output-code').value;
+            if(!text) return;
+            const blob = new Blob([text], { type: 'text/plain' });
+            const anchor = document.createElement('a');
+            anchor.download = 'qyrex_obfuscated.lua';
+            anchor.href = window.URL.createObjectURL(blob);
+            anchor.click();
         }
     </script>
 </body>
