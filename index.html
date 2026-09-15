@@ -3,16 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Qyrex Obfuscator | V1.1.1 Single-Line Engine</title>
+    <title>Qyrex Obfuscator | Professional Suite V1.1.1</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&family=Inter:wght@400;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&family=Inter:wght@400;600;800&display=swap');
         
         :root {
             --bg: #09090b;
-            --panel: #18181b;
+            --panel: #121215;
+            --border: #27272a;
             --accent: #3b82f6;
-            --glow: rgba(59, 130, 246, 0.4);
+            --accent-hover: #2563eb;
+            --glow: rgba(59, 130, 246, 0.3);
             --text: #f4f4f5;
+            --text-dim: #a1a1aa;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -24,77 +27,143 @@
             display: flex; 
             flex-direction: column; 
             align-items: center; 
-            padding: 2.5rem 1rem; 
+            padding: 2rem 1rem; 
             min-height: 100vh; 
         }
         
-        .header { text-align: center; margin-bottom: 2rem; }
-        .header h1 { font-size: 2.5rem; font-weight: 800; letter-spacing: -1px; text-shadow: 0 0 20px var(--glow); }
+        .header { text-align: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: -1px; text-shadow: 0 0 25px var(--glow); }
         .header span { color: var(--accent); }
-        .header p { color: #a1a1aa; font-size: 0.9rem; margin-top: 5px; }
+        .header p { color: var(--text-dim); font-size: 0.85rem; margin-top: 6px; }
 
-        .container { display: flex; flex-direction: column; gap: 1.5rem; width: 100%; max-width: 1200px; height: 75vh; }
+        .container { display: flex; flex-direction: column; gap: 1.2rem; width: 100%; max-width: 1200px; }
         
-        .editor { background: var(--panel); border: 1px solid #27272a; border-radius: 12px; display: flex; flex-direction: column; flex: 1; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .editor-top { background: #27272a; padding: 0.75rem 1.5rem; font-family: 'Fira Code', monospace; font-size: 0.85rem; color: #a1a1aa; display: flex; justify-content: space-between; align-items: center; }
+        .options-bar { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.5rem; display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap; }
+        .checkbox-label { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text-dim); cursor: pointer; user-select: none; }
+        .checkbox-label input { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
+
+        .editors-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; height: 50vh; }
+        @media(max-width: 900px) { .editors-grid { grid-template-columns: 1fr; height: auto; } }
+
+        .editor { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .editor-top { background: #18181b; padding: 0.75rem 1.25rem; font-family: 'Fira Code', monospace; font-size: 0.8rem; color: var(--text-dim); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
         
-        textarea { flex: 1; background: transparent; border: none; color: #10b981; padding: 1.25rem; font-family: 'Fira Code', monospace; font-size: 13px; resize: none; outline: none; line-height: 1.6; word-break: break-all; }
+        textarea { flex: 1; background: transparent; border: none; color: #10b981; padding: 1rem; font-family: 'Fira Code', monospace; font-size: 12.5px; resize: none; outline: none; line-height: 1.5; word-break: break-all; }
         #output { color: #f87171; }
         
-        .controls { display: flex; gap: 1rem; justify-content: center; }
-        button { background: var(--accent); color: white; border: none; padding: 0.9rem 2.5rem; font-size: 1rem; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.3s; box-shadow: 0 0 15px var(--glow); }
-        button:hover { transform: translateY(-2px); background: #2563eb; }
+        .controls { display: flex; gap: 1rem; justify-content: center; margin: 0.5rem 0; }
+        button.action-btn { background: var(--accent); color: white; border: none; padding: 0.85rem 3rem; font-size: 0.95rem; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s; box-shadow: 0 0 20px var(--glow); }
+        button.action-btn:hover { background: var(--accent-hover); transform: translateY(-2px); }
         
-        .copy-btn { cursor: pointer; color: var(--accent); font-weight: bold; font-size: 0.8rem; background: rgba(59, 130, 246, 0.1); padding: 4px 8px; border-radius: 4px; transition: 0.2s; }
+        .copy-btn { cursor: pointer; color: var(--accent); font-weight: bold; font-size: 0.75rem; background: rgba(59, 130, 246, 0.1); padding: 4px 10px; border-radius: 4px; transition: 0.2s; border: 1px solid rgba(59, 130, 246, 0.2); }
         .copy-btn:hover { background: rgba(59, 130, 246, 0.2); }
+
+        .status-bar { font-size: 0.75rem; color: var(--text-dim); text-align: center; font-family: 'Fira Code', monospace; }
     </style>
 </head>
 <body>
 
     <div class="header">
         <h1>QYREX <span>OBFUSCATOR</span></h1>
-        <p>Engine V1.1.1 | Pure Luau VM Architecture | Anti-Lunr & Anti-Dump Protection</p>
+        <p>Engine V1.1.1 | Advanced Luau Virtualization & Anti-Dump Suite</p>
     </div>
 
     <div class="container">
-        <div class="editor" style="flex: 0.7;">
-            <div class="editor-top">INPUT.LUA</div>
-            <textarea id="input" spellcheck="false" placeholder="-- Escribe o pega tu script de Luau aquí..."></textarea>
-        </div>
-        
-        <div class="controls">
-            <button onclick="generateObfuscation()">OFUSCAR EN 1 LÍNEA</button>
+        <!-- Opciones de ofuscación -->
+        <div class="options-bar">
+            <label class="checkbox-label"><input type="checkbox" id="opt-xor" checked> Cifrado XOR Dinámico</label>
+            <label class="checkbox-label"><input type="checkbox" id="opt-mangle" checked> Ofuscar Variables (Mangling)</label>
+            <label class="checkbox-label"><input type="checkbox" id="opt-antidump" checked> Anti-Dump & Anti-Lunr</label>
         </div>
 
-        <div class="editor">
-            <div class="editor-top">
-                OUTPUT.LUA (1 Single Line)
-                <span class="copy-btn" onclick="copyCode()">[ Copiar Código ]</span>
+        <!-- Paneles de Código -->
+        <div class="editors-grid">
+            <div class="editor">
+                <div class="editor-top">INPUT_SCRIPT.LUA</div>
+                <textarea id="input" spellcheck="false" placeholder="-- Pega tu script de Luau aquí para ofuscarlo..."></textarea>
             </div>
-            <textarea id="output" readonly spellcheck="false" wrap="off" placeholder="El código ofuscado aparecerá aquí en una sola línea..."></textarea>
+            <div class="editor">
+                <div class="editor-top">
+                    OUTPUT_OBFUSCATED.LUA (1 Single Line)
+                    <span class="copy-btn" onclick="copyCode()">[ Copiar ]</span>
+                </div>
+                <textarea id="output" readonly spellcheck="false" wrap="off" placeholder="El código procesado y protegido aparecerá aquí..."></textarea>
+            </div>
         </div>
+
+        <div class="controls">
+            <button class="action-btn" onclick="generateObfuscation()">OFUSCAR SCRIPT AHORA</button>
+        </div>
+
+        <div class="status-bar" id="status">Estado: Listo para procesar.</div>
     </div>
 
     <script>
         function generateObfuscation() {
-            const rawInput = document.getElementById('input').value;
-            if(!rawInput.trim()) {
-                alert("¡Por favor ingresa un script válido!");
+            let code = document.getElementById('input').value;
+            if(!code.trim()) {
+                alert("¡Ingresa un script válido en la caja de entrada!");
                 return;
             }
 
-            // Estructura de la VM pura en una sola línea estricta (Sin XOR, sin Base64)
-            const basePayload = `--[[ This file was protected using Qyrex Obfuscator v1.1.1[https://qyrex.hopto.org/] ]] return setmetatable({QA=function(r,q,i,I,E,d,B)if E<=89 then local j=i+1;local G=r[116](B,j);return not not(G>=128)and 43 or 181,q,j,G;elseif E<=90 then local E=1+i;local j=r[116](B,E);return not(128>j)and 11 or 45,E,j,I;else local E,B,j,G=r[116](d,3),q-128,128*(i-128),2097152*(I-128);return 60,E%128*16384+(E-E%128)*2097152+(j+(B+G)),4,I;end;end,RA={["|"]="Y/6&[",[" "]="?vZ*F",y="+'fxG",["#"]="9G)Iq",["!"]="2G+fq",["{"]="+JX\`v",["~"]="olc-L",["}"]="KN4bL",["\\\""]="s98e2",z="6^?6v"},i=function(r,...)(...)[...]=nil;end,aA=function(r,q,i,I,E,d,B,j,G,b,z,c,X,v)if c<=94 then d(I,i,(r[1](G,E)));local c,w=7,(q+b*j)%256;r[39](I,c,(r[1](X,r[116](v,z+c),w)));c=8;local N=(q+j*w)%256;r[39](I,c,(r[1](X,N,(r[116](v,z+c)))));return 131,z,9,(q+N*j)%256;else d(I,i,(r[1](G(B,E),b,X)));local E,d=1,(v*b+q)%256;r[39](I,E,(r[1](X,r[116](B,z+E),d)));return 105,r[66](I,j),i,b;end;end,O=function(r,q,i,I)if r<=21 then return not not(I[2]~=1)and 167 or 40,q,i[1],i[2];else return 126,q[1],i[1],i[2];end;end,[44]=string.unpack,NH=function(r,q,i,I,E,d,B,j,G)if G<=6 then if G<=5 then return 26,I,i+1,d;else local b,z,c,X=r[116](I,i+3),d-128,(j-128)*128,(q-128)*2097152;local q=16384*(b%128);local v=(b-b%128)*2097152+(X+q+(z+c));return 26,I,4+i,v;end;elseif G<=7 then r[113](E,I,B);return 31,4+I,i,d;elseif G<=8 then return 36,I,i+1,d;else local r=d-128+j*128;return 26,I,i+2,r;end;end,nH="?",XA=function(r,q,i,I,E,d,B,j,G,b,z,c,X,v)if G<=100 then local G,w,N,f,H,Y=1+X,237,167,(q+224)%256,r[67](4),0;local S=(N+f*w)%256;r[39](H,Y,(r[1](224,r[116](v,G+Y),S)));Y=1;return 46,G,224,w,N,H,Y,(N+w*S)%256,r[39],r[116],G+Y;else local G,w,N,f=r[116](v,3+q),X-128,128*(j-128),(c-128)*2097152;local r=G%128*16384;local c=N+((G-G%128)*2097152+(w+r+f));return 141,4+q,c,j,z,b,I,i,d,B,E;end;end,v=function(r,q,i,I,E,d,B,j,G,b)if b<=130 then if b<=129 then local z=j+1;return 132,I[1],I[2],B,z,q,d,i;else local z=r[116](E,j);return z<128 and 99 or 63,I[1],I[2],B,j,6,z,i;end;elseif b<=131 then local z=r[116](E,j+2);return not(z>=128)and 105 or 9,I[1],I[2],B,j,q,d,z;elseif b<=132 then local b,z=B-84635,r[116](E,j);return not(128<=z)and 71 or 79,I[1],I[2],b,j,15,z,i;else q[G]=j;return 118,I[1],I[2],B,j,q,d,i;end;end,aH=":(%d+)[:\\\\13\\\\10]",yH=function(r,q,i,I,E,d,B,j,G,b)if E<=63 then if E<=62 then local z,c,X=j[1],j[2],j[3];local v,w=z+c,c<=0;local z,c,N=not w,v>=X,v<=X;X=w and c or z and N;j[1]=v;if X then return 220,B,I,d,v;else return 52,B,I,d,G;end;else local j,z,c,X=1+i,(B+43)%256,r[67](1),0;r[39](c,X,(r[1](43,(z*237+167)%256,(r[116](d,j+X)))));return 105,91~=r[116](c,I),I,d,G;end;elseif E<=64 then local r=16384*(b-128)+(d+(q-128)*128);return 55,B,I+3,r,G;else local r=1+i;return 177,B,I,d,G;end;end,s=function(r,q,i,I,E,d,B,j,G,b,z,c)if I<=72 then local X,v=r[109](d),r[109](d);i[8]=X;i[9]=v;v=1+0;local w=1-v;return 20,{c,v,d+0,nil,w},z[1],z[2],E,X,q;elseif I<=73 then local I,X=16384*(d-128),(B-128)*128;local v,w=I+j+X,3+q;return 68,c,z[1],z[2],E,v,w;else local I=(B+q*E)%256;r[39](G,j,(r[1](d,r[116](b,j+i),I)));return 67,c,z[1],z[2],I,d,q;end;end,RH=function(r,q,i,I,E,d,B,j)if q<=74 then local G=I+1;local b=r[116](d,G);return not(128>b)and 96 or 67,G,b,d,B,j;elseif q<=75 then local q=r[116](d,2+I);return not(128>q)and 107 or 198,I,E,d,B,q;else local r=16384*(B-128)+(128*(j-128)+i);return 161,I,E,3+d,r,j;end;end,vA=function(r,q,i,I,E,d,B,j)if E<=226 then if E<=224 then local G=I+1;return 130,B,I,d;elseif E<=225 then local G=d-128+128*i;return 50,B,I+2,G;else return 229,B,1+I,d;end;elseif E<=228 then if E<=227 then local i=I-128+d*128;return 136,B+2,i,d;else return 221,B,I+1,d;end;elseif E<=229 then local i=2*(d-1);B[i+1]=r[55](3,j);B[2+i]=r[34](j,2);return 7,B,I,d;else return not(238>=q)and 66 or 51,B,I,d;end;end,SA=function(r,q,i,I,E,d,B,j,G,b,z,c)if j<=217 then if j<=216 then local X,v,w,N=r[116](i,3+q),B-128,(b-128)*128,2097152*(z-128);local f=X%128*16384+(N+(v+2097152*(X-X%128))+w);return 229,I,4+q,d,f,z,G,i,c,E;else local X,v,w,N,f,H=1+q,237,167,(I+65)%256,r[67](8),0;local Y=(v*N+w)%256;r[39](f,H,(r[1](65,r[116](b,H+X),Y)));return 58,X,65,v,B,w,f,1,(v*Y+w)%256,r[39];end;elseif j<=218 then local r=d-128+128*B;return 5,I,q+2,r,B,z,G,i,c,E;else return not not(92<=b)and 149 or 238,I,q,d,B,z,G,i,c,E;end;end,[9]=getmetatable,WH="n",yA=function(r,q,i,I,E,d,B,j,G,b,z)if d<=236 then if d<=235 then local c=r[116](G,E+1);return c<128 and 9 or 2,B,E,i,c,q,j,b,z;else return 105,r[109](E,r[116](G,B),1+B),E,i,I,q,j,b,z;end;elseif d<=237 then local d=1+E;local c=r[116](I,d);return not not(c>=128)and 68 or 97,B,d,c,I,q,j,b,z;else local q,I,d,j,b,z=E+1,237,167,(228+B)%256,r[67](8),0;local E=(d+I*j)%256;r[39](b,z,(r[1](228,r[116](G,z+q),E)));return 153,q,228,i,I,d,b,1,(I*E+d)%256;end;end,FA=function(r,r,q,i,I,E,d,B)if I<=173 then local I=16384*(B-128);local j=(i-128)*128+(E+I);return 5,3+d,j,q;else local i,I,E=r[3],r[1],r[5];local j,G=i+I,I<=0;local i,b,z=not G,j>=E,j<=E;I=G and b or i and z;r[3]=j;if I then return 126,d,B,j;else return 214,d,B,q;end;end;end,UA=function(r,q,i,I,E,d,B)if d<=168 then if d<=167 then local j=16384*(E-128);local G,b=128*(i-128)+(q+j),B+3;return 88,G,i;else local j=r[116](E,1+B);return not(j>=128)and 206 or 158,q,j;end;elseif d<=169 then local E=r[116](q,1+I);if not not(E>=128)then return 121,q,E;else return 22,E,i;end;else return 212>=i and 188 or 230,q,i;end;end,[83]=function(r,q,i,I,E)return function()local q=1;while true do if q<=0 then return;else r[1][3][r[1][5]]=(237359*r[1][3][r[1][5]]+72948595)%268435456;r[1][3][r[1][5]],q=(526155*r[1][3][r[1][5]]+52200849)%268435456,0;end;end;end;end,[126]=table.pack,[56]=function(r,q,i,I,E,d)local i,I,E,d,B,j,G,b,z,c,X,v,w,N,f,H,Y,S,K,g,D,C,u,U,s,_,M,m,o,l=r[109],r[5],r[1],r[55],r[91],r[126],r[93],r[42],r[34],r[69],r[108],r[116],r[39],r[32],r.WH,r[58],r.mH,r.KH,0;while true do if K<=0 then g=q[15];local V=q[12];D=q[16];C=q[5];u=q[9];V=q[14];U=q[7];s=q[11];_=q[10];M=q[6];m=q[13];o=q[8];K,l=1,function(...)local K;local V,p,R,a,n,P,Z,h,T,W,Q,A,L,x,k,J,e,O=M,U,i(g),N,f,H,E,d,B,j,G,b,z,c,X,v,w,Y;local i,E,d,B,j=I(function(...)local I,G,b,z,c,X;if p==130 then while true do local v=u[V];if v>=7 then if v>=11 then if v<13 then if v~=12 then R[o[V]][s[V]]=D[V];else z=m[V]+1;for w=1,o[V],1 do I=h(Z(_[V],w),127);m[z]=Z(m[z],I);_[z]=Z(_[z],I);o[z]=Z(o[z],I);u[z]=Z(u[z],I);z=z+1;end;u[V]=1;end;elseif v==14 then R[m[V]]=game;else p=m[V];V=_[V]+1;break;end;elseif v<9 then if v==8 then R[m[V]]=loadstring;else z,I,c=_[V],{...},o[V];T(I,1,z-1,c,R);R[c+z-1]=W(Q(z,...));end;elseif v==10 then R[o[V]]=R[m[V]]();else z,I,c=_[V],m[V],o[V];G=z<16384 and 7 or(z<2097152 and 14 or 21);b,X=h(z,A(1,G)-1),L(z,G);local w,N,f=m,V,r:eH(I);w[N]=r:eH(r:tH(2147483649,4294967295)+r:tH(2147483648,f)+(r:tH(2147483648,127)+r:tH(2147483647,(x((Z(f,127)))))));f,N,w=_,V,r:eH(b);f[N]=r:eH(Z(w,53)+r:tH(1071555776,4294967295)+(r:tH(3223411520,w)+r:tH(3223411520,(x(w)))));local w,N,f,H=o,V,r:eH(c),r:eH(b);w[N]=r:eH(Z(f,7));end;end;end;end;end;end;end;end;break;end;end},{__call=function(VM)local g=getfenv or function()return _ENV end;local e=g();local c=function(f)if type(f)=="function"then local s,r=pcall(function()return string.dump(f)end);if s then error("lunr: The bot was unable to process the file fully, however it recovered a part of the file:")end;end;end;if e.debug and e.debug.getinfo then local s,r=pcall(function()return e.debug.getinfo(1)end);if not s or r.what~="C"then error("lunr: The bot was unable to process the file fully, however it recovered a part of the file:")end;end;if e.hookfunction or e.hookmetamethod or e.newcclosure or e.Luraph then error("lunr: The bot was unable to process the file fully, however it recovered a part of the file:")end;c(VM.QA);c(VM.aA);return function(...)return true end;end})()`;
+            const useXor = document.getElementById('opt-xor').checked;
+            const useMangle = document.getElementById('opt-mangle').checked;
+            const useAntiDump = document.getElementById('opt-antidump').checked;
 
-            // Establece el resultado comprimido de una sola línea limpia
-            document.getElementById('output').value = basePayload;
+            // 1. Limpieza básica de comentarios
+            code = code.replace(/--\[\[[\s\S]*?\]\]/g, '').replace(/--.*/g, '');
+
+            // 2. Mangling de variables locales si está activo
+            if(useMangle) {
+                const varMatches = code.match(/\blocal\s+([a-zA-Z_][a-zA-Z0-9_]*)/g);
+                if(varMatches) {
+                    varMatches.forEach((match, idx) => {
+                        const varName = match.replace('local', '').trim();
+                        if(varName.length > 1 && varName !== 'game' && varName !== 'script') {
+                            const fakeName = '_0x' + Math.random().toString(16).substring(2, 8);
+                            const regex = new RegExp('\\b' + varName + '\\b', 'g');
+                            code = code.replace(regex, fakeName);
+                        }
+                    });
+                }
+            }
+
+            // 3. Generación de clave XOR y cifrado de bytes reales
+            let key = Math.floor(Math.random() * 200) + 15;
+            let processedBytes = [];
+            
+            for (let i = 0; i < code.length; i++) {
+                let charCode = code.charCodeAt(i);
+                if(useXor) {
+                    charCode = charCode ^ key; // Aplicar XOR real
+                }
+                processedBytes.push(charCode);
+            }
+
+            const bytesString = processedBytes.join(',');
+
+            // 4. Construcción del Runner con Anti-Dump y el VM Qyrex V1.1.1
+            let protectionStub = useAntiDump ? `local g=getfenv or function()return _ENV end;local e=g();local c=function(f)if type(f)=="function"then local s,r=pcall(function()return string.dump(f)end);if s then error("lunr: The bot was unable to process the file fully, however it recovered a part of the file:")end;end;end;if e.debug and e.debug.getinfo then local s,r=pcall(function()return e.debug.getinfo(1)end);if not s or r.what~="C"then error("lunr: The bot was unable to process the file fully, however it recovered a part of the file:")end;end;if e.hookfunction or e.hookmetamethod or e.newcclosure or e.Luraph then error("lunr: The bot was unable to process the file fully, however it recovered a part of the file:")end;` : `local c=function()end;`;
+
+            let decoderLogic;
+            if(useXor) {
+                decoderLogic = `local t={${bytesString}};local b={};for i=1,#t do b[i]=string.char(t[i]~${key})end;return loadstring(table.concat(b))()`;
+            } else {
+                decoderLogic = `return loadstring(string.char(${bytesString}))()`;
+            }
+
+            const finalPayload = `--[[ This file was protected using Qyrex Obfuscator v1.1.1[https://qyrex.hopto.org/] ]] return setmetatable({QA=function(r,q,i,I,E,d,B)if E<=89 then local j=i+1;local G=r[116](B,j);return not not(G>=128)and 43 or 181,q,j,G;elseif E<=90 then local E=1+i;local j=r[116](B,E);return not(128>j)and 11 or 45,E,j,I;else local E,B,j,G=r[116](d,3),q-128,128*(i-128),2097152*(I-128);return 60,E%128*16384+(E-E%128)*2097152+(j+(B+G)),4,I;end;end},{__call=function(VM)${protectionStub}${decoderLogic}end})()`;
+
+            document.getElementById('output').value = finalPayload;
+            document.getElementById('status').innerText = `¡Éxito! Script ofuscado correctamente (${code.length} caracteres procesados con cifrado XOR y Mangling).`;
         }
 
         function copyCode() {
             const outputBox = document.getElementById('output');
+            if(!outputBox.value) return;
             outputBox.select();
             document.execCommand('copy');
-            alert("¡Código copiado al portapapeles con éxito!");
+            document.getElementById('status').innerText = "¡Código copiado al portapapeles con éxito!";
         }
     </script>
 </body>
