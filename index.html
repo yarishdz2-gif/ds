@@ -1,103 +1,81 @@
---[[
-  ofuscador.luau
-  Uso: lune ofuscador.luau entrada.luau salida.luau
-]]
-
-local BASE = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@[]^_{|}~.,:/"
-
-local function rand(seed)
-  local s = seed or (os.time() * 2654435761) % 2147483648
-  return function()
-    s = (s * 1103515245 + 12345) % 2147483648
-    return s / 2147483648
-  end
-end
-
-local function shuffle(str, r)
-  local t = {}
-  for i = 1, #str do t[i] = str:sub(i, i) end
-  for i = #t, 2, -1 do
-    local j = math.floor(r() * i) + 1
-    t[i], t[j] = t[j], t[i]
-  end
-  return table.concat(t)
-end
-
-local function obfuscate(src)
-  local r = rand()
-  local alpha = shuffle(BASE, r)          -- alfabeto único por salida
-  local B = #alpha
-
-  local xkey = math.floor(r() * 256)      -- clave XOR por salida
-  local bytes = {}
-  for i = 1, #src do
-    bytes[i] = bit32.bxor(src:byte(i), xkey)
-  end
-
-  local check = 0
-  for i = 1, #bytes do check = (check + bytes[i]) % 256 end
-
-  -- cada byte -> 2 caracteres del alfabeto
-  local payload = {}
-  for i = 1, #bytes do
-    local b = bytes[i]
-    payload[#payload + 1] = alpha:sub(b % B + 1, b % B + 1)
-      .. alpha:sub(math.floor(b / B) + 1, math.floor(b / B) + 1)
-  end
-  -- checksum al final
-  payload[#payload + 1] = alpha:sub(check % B + 1, check % B + 1)
-    .. alpha:sub(math.floor(check / B) + 1, math.floor(check / B) + 1)
-
-  local full = table.concat(payload)
-
-  -- fragmentar en chunks de tamaño aleatorio
-  local chunks = {}
-  local i = 1
-  while i <= #full do
-    local len = math.min(60 + math.floor(r() * 80), #full - i + 1)
-    chunks[#chunks + 1] = full:sub(i, i + len - 1)
-    i = i + len
-  end
-
-  local out = {}
-  out[#out + 1] = "local T=" .. '"' .. table.concat(chunks, '"..\n"') .. '"'
-  out[#out + 1] = 'local U="' .. alpha .. '"'
-  out[#out + 1] = "local K=" .. check
-  out[#out + 1] = "local X=" .. xkey
-  out[#out + 1] = "local function D(s)"
-  out[#out + 1] = "local c={}"
-  out[#out + 1] = "for i=1,#s,2 do"
-  out[#out + 1] = "local a=U:find(s:sub(i,i),1,true)-1"
-  out[#out + 1] = "local b=U:find(s:sub(i+1,i+1),1,true)-1"
-  out[#out + 1] = "c[#c+1]=a+b*#U"
-  out[#out + 1] = "end"
-  out[#out + 1] = "return c"
-  out[#out + 1] = "end"
-  out[#out + 1] = "local B=D(T)"
-  out[#out + 1] = "local C=0"
-  out[#out + 1] = "for i=1,#B-1 do C=(C+B[i])%256 end"
-  out[#out + 1] = "if C~=K then error('Integrity check failed') end"
-  out[#out + 1] = "local S=''"
-  out[#out + 1] = "for i=1,#B-1 do S=S..string.char(bit32.bxor(B[i],X)) end"
-  out[#out + 1] = "if not game or not loadstring then error('Roblox only') end"
-  out[#out + 1] = "loadstring(S)()"
-  return table.concat(out, "\n")
-end
-
-local args = { ... }
-if #args < 2 then
-  print("Uso: ofuscador.luau <entrada.luau> <salida.luau>")
-  return
-end
-
-local f = io.open(args[1], "r")
-if not f then print("No se pudo abrir: " .. args[1]) return end
-local src = f:read("*a")
-f:close()
-
-local result = obfuscate(src)
-
-local o = io.open(args[2], "w")
-o:write(result)
-o:close()
-print("OK -> " .. args[2] .. " (" .. #src .. " bytes -> " .. #result .. " bytes)")
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Luau Obfuscator Pro</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    background: radial-gradient(1200px 800px at 20% 10%, #1b2735 0%, #090a0f 55%, #0d0f14 100%);
+    color: #e6edf3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+  .glass {
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    padding: 2rem;
+    width: 100%;
+    max-width: 960px;
+  }
+  h1 { font-size: 1.5rem; letter-spacing: 0.5px; }
+  h1 span { color: #58a6ff; }
+  .sub { color: #8b949e; font-size: 0.85rem; margin-top: 0.3rem; margin-bottom: 1.5rem; }
+  label { display: block; font-size: 0.8rem; color: #8b949e; margin: 1rem 0 0.4rem; text-transform: uppercase; letter-spacing: 1px; }
+  textarea {
+    width: 100%;
+    height: 180px;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    color: #e6edf3;
+    font-family: 'Cascadia Code', Consolas, monospace;
+    font-size: 0.85rem;
+    padding: 0.9rem;
+    resize: vertical;
+    outline: none;
+  }
+  textarea:focus { border-color: #58a6ff; }
+  .row { display: flex; gap: 0.7rem; margin-top: 1rem; flex-wrap: wrap; }
+  button {
+    background: linear-gradient(135deg, #238636, #2ea043);
+    color: #fff;
+    border: none;
+    padding: 0.7rem 1.5rem;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  button:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(46,160,67,0.35); }
+  button.ghost {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+  button.ghost:hover { background: rgba(255,255,255,0.14); box-shadow: none; }
+  #stats { margin-top: 0.8rem; font-size: 0.8rem; color: #8b949e; font-family: monospace; }
+  .badge {
+    display: inline-block;
+    background: rgba(88,166,255,0.15);
+    color: #58a6ff;
+    border: 1px solid rgba(88,166,255,0.3);
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+  }
+</style>
+</head>
+<body>
+<div class="glass">
