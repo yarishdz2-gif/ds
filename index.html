@@ -3,79 +3,152 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Luau Obfuscator Pro</title>
+<title>OFUSCADOR</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     font-family: 'Segoe UI', system-ui, sans-serif;
     min-height: 100vh;
-    background: radial-gradient(1200px 800px at 20% 10%, #1b2735 0%, #090a0f 55%, #0d0f14 100%);
+    background: #0d1117;
     color: #e6edf3;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 2rem;
+    padding: 1rem;
   }
-  .glass {
-    background: rgba(255,255,255,0.05);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 20px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-    padding: 2rem;
-    width: 100%;
-    max-width: 960px;
+  .box { width: 100%; max-width: 860px; }
+  h1 {
+    font-size: 2.4rem;
+    font-weight: 800;
+    letter-spacing: 6px;
+    text-align: center;
+    background: linear-gradient(90deg, #58a6ff, #a371f7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 1.5rem;
   }
-  h1 { font-size: 1.5rem; letter-spacing: 0.5px; }
-  h1 span { color: #58a6ff; }
-  .sub { color: #8b949e; font-size: 0.85rem; margin-top: 0.3rem; margin-bottom: 1.5rem; }
-  label { display: block; font-size: 0.8rem; color: #8b949e; margin: 1rem 0 0.4rem; text-transform: uppercase; letter-spacing: 1px; }
   textarea {
     width: 100%;
-    height: 180px;
-    background: rgba(0,0,0,0.35);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 12px;
+    height: 220px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
     color: #e6edf3;
-    font-family: 'Cascadia Code', Consolas, monospace;
+    font-family: Consolas, monospace;
     font-size: 0.85rem;
     padding: 0.9rem;
     resize: vertical;
     outline: none;
   }
   textarea:focus { border-color: #58a6ff; }
-  .row { display: flex; gap: 0.7rem; margin-top: 1rem; flex-wrap: wrap; }
   button {
+    display: block;
+    width: 100%;
+    margin: 1rem 0;
     background: linear-gradient(135deg, #238636, #2ea043);
     color: #fff;
     border: none;
-    padding: 0.7rem 1.5rem;
+    padding: 1rem;
     border-radius: 10px;
-    font-size: 0.95rem;
-    font-weight: 600;
+    font-size: 1.3rem;
+    font-weight: 800;
+    letter-spacing: 3px;
     cursor: pointer;
-    transition: transform 0.15s, box-shadow 0.15s;
   }
-  button:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(46,160,67,0.35); }
-  button.ghost {
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.15);
-  }
-  button.ghost:hover { background: rgba(255,255,255,0.14); box-shadow: none; }
-  #stats { margin-top: 0.8rem; font-size: 0.8rem; color: #8b949e; font-family: monospace; }
-  .badge {
-    display: inline-block;
-    background: rgba(88,166,255,0.15);
-    color: #58a6ff;
-    border: 1px solid rgba(88,166,255,0.3);
-    padding: 0.15rem 0.5rem;
-    border-radius: 6px;
-    font-size: 0.7rem;
-    margin-left: 0.5rem;
-    vertical-align: middle;
-  }
+  button:hover { filter: brightness(1.1); }
+  #stats { text-align: center; font-size: 0.8rem; color: #8b949e; font-family: monospace; }
 </style>
 </head>
 <body>
-<div class="glass">
+<div class="box">
+  <h1>OFUSCADOR</h1>
+  <textarea id="in" placeholder="PEGA TU SCRIPT LUAU AQUÍ..."></textarea>
+  <button onclick="go()">⚡ OFUSCAR</button>
+  <textarea id="out" readonly placeholder="AQUÍ SALE TU CÓDIGO OFUSCADO..."></textarea>
+  <div id="stats"></div>
+</div>
+
+<script>
+const BASE = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@[]^_{|}~.,:/";
+
+function rng(seed) {
+  let s = seed >>> 0;
+  return function () {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+function shuffle(str, r) {
+  const t = str.split("");
+  for (let i = t.length - 1; i > 0; i--) {
+    const j = Math.floor(r() * (i + 1));
+    [t[i], t[j]] = [t[j], t[i]];
+  }
+  return t.join("");
+}
+
+function obfuscate(src) {
+  const r = rng((Date.now() ^ (Math.random() * 0xffffffff)) >>> 0);
+  const alpha = shuffle(BASE, r);
+  const B = alpha.length;
+  const xkey = Math.floor(r() * 256);
+
+  const bytes = [];
+  for (let i = 0; i < src.length; i++) bytes.push(src.charCodeAt(i));
+
+  let check = 0;
+  for (const b of bytes) check = (check + b) % 256;
+
+  const enc = v => alpha[v % B] + alpha[Math.floor(v / B) % B];
+
+  let payload = enc(xkey) + enc(check);
+  for (const b of bytes) payload += enc(b);
+
+  const chunks = [];
+  let i = 0;
+  while (i < payload.length) {
+    const len = Math.min(60 + Math.floor(r() * 80), payload.length - i);
+    chunks.push(payload.slice(i, i + len));
+    i += len;
+  }
+  const T = chunks.map(c => '"' + c + '"').join("..\n");
+
+  const decoder = [
+    'local T=' + T,
+    'local U="' + alpha + '"',
+    'local function D(s)',
+    'local c={}',
+    'for i=1,#s,2 do',
+    'local a=U:find(s:sub(i,i),1,true)-1',
+    'local b=U:find(s:sub(i+1,i+1),1,true)-1',
+    'c[#c+1]=a+b*#U',
+    'end',
+    'return c',
+    'end',
+    'local B=D(T)',
+    'local X=B[1]',
+    'local K=B[2]',
+    'local C=0',
+    'for i=3,#B do C=(C+B[i])%256 end',
+    "if C~=K then error('Integrity check failed') end",
+    "local S=''",
+    'for i=3,#B do S=S..string.char(bit32.bxor(B[i],X)) end',
+    "if not game or not loadstring then error('Roblox only') end",
+    'loadstring(S)()'
+  ];
+
+  return decoder.join("\n");
+}
+
+function go() {
+  const src = document.getElementById("in").value;
+  if (!src.trim()) { alert("Pega primero tu script."); return; }
+  const out = obfuscate(src);
+  document.getElementById("out").value = out;
+  document.getElementById("stats").textContent =
+    "Entrada: " + src.length + " bytes → Salida: " + out.length + " bytes";
+}
+</script>
+</body>
+</html>
