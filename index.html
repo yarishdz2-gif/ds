@@ -2,94 +2,55 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ofuscador Luau — Símbolos</title>
+<title>Ofuscador Luau Pro</title>
 <style>
-  body { font-family: monospace; background: #0d1117; color: #c9d1d9; padding: 2rem; max-width: 900px; margin: auto; }
-  textarea { width: 100%; height: 150px; background: #161b22; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 0.8rem; font-family: monospace; }
-  button { background: #238636; color: #fff; border: none; padding: 0.7rem 1.4rem; border-radius: 6px; cursor: pointer; margin-top: 1rem; font-size: 1rem; }
-  button:hover { background: #2ea043; }
-  #out { height: 200px; }
-  .label { margin-top: 1.2rem; font-weight: bold; color: #58a6ff; }
+  body{font-family:monospace;background:#0d1117;color:#c9d1d9;padding:2rem;max-width:900px;margin:auto}
+  textarea{width:100%;height:150px;background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:.8rem;font-family:monospace}
+  button{background:#238636;color:#fff;border:none;padding:.7rem 1.4rem;border-radius:6px;cursor:pointer;margin-top:1rem;font-size:1rem}
+  #out{height:200px}
+  .label{margin-top:1.2rem;font-weight:bold;color:#58a6ff}
 </style>
 </head>
 <body>
-  <h2>Ofuscador Luau → Símbolos</h2>
-  <div class="label">Código Luau original</div>
-  <textarea id="in" placeholder="Pega aquí tu script Luau..."></textarea>
-  <br>
-  <button onclick="obfuscate()">Ofuscar</button>
-  <div class="label">Resultado (código HTML listo para GitHub Pages)</div>
-  <textarea id="out" readonly></textarea>
-  <button onclick="copyOut()">Copiar resultado</button>
+<h2>Ofuscador Luau → Símbolos Puros</h2>
+<div class="label">Código Luau original</div>
+<textarea id="in" placeholder="Pega tu script Luau..."></textarea><br>
+<button onclick="go()">Ofuscar</button>
+<div class="label">Resultado (solo símbolos, sin HTML)</div>
+<textarea id="out" readonly></textarea>
+<button onclick="copyOut()">Copiar</button>
 
-  <script>
-    // Alfabeto: solo los símbolos pedidos (17 caracteres)
-    const ALPHABET = "°!\"#$%&/()=?¡¨][@|'";
-    const BASE = ALPHABET.length; // 17
-
-    // Convierte un número a base 17 usando el alfabeto
-    function toSym(n) {
-      if (n === 0) return ALPHABET[0];
-      let s = "";
-      while (n > 0) {
-        s = ALPHABET[n % BASE] + s;
-        n = Math.floor(n / BASE);
-      }
-      return s;
-    }
-
-    function obfuscate() {
-      const src = document.getElementById("in").value;
-      const bytes = [];
-      for (let i = 0; i < src.length; i++) {
-        bytes.push(src.charCodeAt(i));
-      }
-      // Cada byte -> símbolo en base 17, separados por un marcador
-      const encoded = bytes.map(b => toSym(b)).join("¨¨"); // ¨¨ como separador
-      const payload = encoded;
-
-      const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<title>Script Ofuscado</title>
-</head>
-<body>
 <script>
-// Decodificador Luau embebido
-const ALPHABET = ${JSON.stringify(ALPHABET)};
-const BASE = ALPHABET.length;
-const payload = ${JSON.stringify(payload)};
-
-function fromSym(s) {
-  let n = 0;
-  for (let i = 0; i < s.length; i++) {
-    n = n * BASE + ALPHABET.indexOf(s[i]);
+const A="°!\"#$%&/()=?¡¨][@|'";
+const B=A.length;
+function toS(n){let s="";do{s=A[n%B]+s;n=Math.floor(n/B);}while(n>0);return s;}
+function obf(src){
+  // Capa 1: bytes -> base 17
+  let p=[];
+  for(let i=0;i<src.length;i++)p.push(toS(src.charCodeAt(i)));
+  // Capa 2: re-codificar con semilla y checksum
+  let seed=(src.length*7+13)%B;
+  let out="";
+  let acc=0;
+  for(let i=0;i<p.length;i++){
+    let v=(p[i].length*B + A.indexOf(p[i][0]) + seed)%B;
+    out+=A[v];
+    acc=(acc+v+1)%B;
   }
-  return n;
+  // checksum al final
+  out+=A[acc];
+  // cabecera con longitud y semilla (ofuscada)
+  let hdr=toS(src.length)+A[seed];
+  return hdr+out;
 }
-
-const parts = payload.split("¨¨");
-let code = "";
-for (const p of parts) {
-  code += String.fromCharCode(fromSym(p));
+function go(){
+  const src=document.getElementById("in").value;
+  document.getElementById("out").value=obf(src);
 }
-
-// Ejecutar (en navegador usa eval; en Luau usarías loadstring)
-eval(code);
-<\\/script>
-</body>
-</html>`;
-
-      document.getElementById("out").value = html;
-    }
-
-    function copyOut() {
-      const el = document.getElementById("out");
-      el.select();
-      document.execCommand("copy");
-    }
-  </script>
+function copyOut(){
+  const el=document.getElementById("out");
+  el.select();document.execCommand("copy");
+}
+</script>
 </body>
 </html>
