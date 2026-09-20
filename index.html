@@ -1,227 +1,95 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Qyrex Obfuscator | Ultimate Engine V1.1.1</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&family=Inter:wght@400;600;800&display=swap');
-        
-        :root {
-            --bg: #070709;
-            --panel: #111116;
-            --border: #23232d;
-            --accent: #3b82f6;
-            --accent-hover: #2563eb;
-            --success: #10b981;
-            --glow: rgba(59, 130, 246, 0.35);
-            --text: #f4f4f5;
-            --text-dim: #a1a1aa;
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        body { 
-            background: var(--bg); 
-            color: var(--text); 
-            font-family: 'Inter', sans-serif; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            padding: 2rem 1rem; 
-            min-height: 100vh; 
-        }
-        
-        .header { text-align: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 2.5rem; font-weight: 800; letter-spacing: -1px; text-shadow: 0 0 30px var(--glow); }
-        .header span { color: var(--accent); }
-        .header p { color: var(--text-dim); font-size: 0.85rem; margin-top: 6px; font-family: 'Fira Code', monospace; }
-
-        .container { display: flex; flex-direction: column; gap: 1.2rem; width: 100%; max-width: 1250px; }
-        
-        .toolbar { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; box-shadow: 0 8px 25px rgba(0,0,0,0.4); }
-        .options-group { display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap; }
-        .checkbox-label { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text-dim); cursor: pointer; user-select: none; font-family: 'Fira Code', monospace; }
-        .checkbox-label input { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
-
-        .presets-group { display: flex; gap: 0.5rem; }
-        .preset-btn { background: #1f1f2e; border: 1px solid var(--border); color: var(--text-dim); padding: 5px 12px; font-size: 0.75rem; border-radius: 6px; cursor: pointer; font-family: 'Fira Code', monospace; transition: 0.2s; }
-        .preset-btn:hover { background: var(--accent); color: white; border-color: var(--accent); }
-
-        .editors-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; height: 55vh; }
-        @media(max-width: 950px) { .editors-grid { grid-template-columns: 1fr; height: auto; } }
-
-        .editor { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
-        .editor-top { background: #16161c; padding: 0.75rem 1.25rem; font-family: 'Fira Code', monospace; font-size: 0.8rem; color: var(--text-dim); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
-        
-        textarea { flex: 1; background: transparent; border: none; color: #34d399; padding: 1.2rem; font-family: 'Fira Code', monospace; font-size: 13px; resize: none; outline: none; line-height: 1.6; word-break: break-all; }
-        #output { color: #f87171; }
-        
-        .action-container { display: flex; gap: 1rem; justify-content: center; margin: 0.5rem 0; }
-        button.action-btn { background: var(--accent); color: white; border: none; padding: 0.9rem 3.5rem; font-size: 1rem; font-weight: bold; border-radius: 10px; cursor: pointer; transition: 0.2s; box-shadow: 0 0 25px var(--glow); font-family: 'Inter', sans-serif; }
-        button.action-btn:hover { background: var(--accent-hover); transform: translateY(-2px); box-shadow: 0 0 35px var(--accent); }
-        
-        .copy-btn { cursor: pointer; color: var(--accent); font-weight: bold; font-size: 0.75rem; background: rgba(59, 130, 246, 0.1); padding: 5px 12px; border-radius: 6px; transition: 0.2s; border: 1px solid rgba(59, 130, 246, 0.2); font-family: 'Fira Code', monospace; }
-        .copy-btn:hover { background: rgba(59, 130, 246, 0.25); color: white; }
-
-        .footer-status { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-dim); font-family: 'Fira Code', monospace; padding: 0 0.5rem; }
-        
-        /* Notificación Toast */
-        #toast { position: fixed; bottom: 20px; right: 20px; background: var(--success); color: white; padding: 12px 24px; border-radius: 8px; font-weight: bold; font-size: 0.85rem; box-shadow: 0 5px 20px rgba(0,0,0,0.5); opacity: 0; transition: 0.3s ease; pointer-events: none; font-family: 'Fira Code', monospace; z-index: 1000; }
-        #toast.show { opacity: 1; transform: translateY(-5px); }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ofuscador Luau — Símbolos</title>
+<style>
+  body { font-family: monospace; background: #0d1117; color: #c9d1d9; padding: 2rem; max-width: 900px; margin: auto; }
+  textarea { width: 100%; height: 150px; background: #161b22; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 0.8rem; font-family: monospace; }
+  button { background: #238636; color: #fff; border: none; padding: 0.7rem 1.4rem; border-radius: 6px; cursor: pointer; margin-top: 1rem; font-size: 1rem; }
+  button:hover { background: #2ea043; }
+  #out { height: 200px; }
+  .label { margin-top: 1.2rem; font-weight: bold; color: #58a6ff; }
+</style>
 </head>
 <body>
+  <h2>Ofuscador Luau → Símbolos</h2>
+  <div class="label">Código Luau original</div>
+  <textarea id="in" placeholder="Pega aquí tu script Luau..."></textarea>
+  <br>
+  <button onclick="obfuscate()">Ofuscar</button>
+  <div class="label">Resultado (código HTML listo para GitHub Pages)</div>
+  <textarea id="out" readonly></textarea>
+  <button onclick="copyOut()">Copiar resultado</button>
 
-    <div class="header">
-        <h1>QYREX <span>OBFUSCATOR</span></h1>
-        <p>Engine V1.1.1 | Zero-Error Virtualization & Anti-Dump Suite</p>
-    </div>
+  <script>
+    // Alfabeto: solo los símbolos pedidos (17 caracteres)
+    const ALPHABET = "°!\"#$%&/()=?¡¨][@|'";
+    const BASE = ALPHABET.length; // 17
 
-    <div class="container">
-        <!-- Barra de opciones y presets -->
-        <div class="toolbar">
-            <div class="options-group">
-                <label class="checkbox-label"><input type="checkbox" id="opt-xor" checked> Cifrado XOR Seguro</label>
-                <label class="checkbox-label"><input type="checkbox" id="opt-mangle" checked> Mangling de Variables</label>
-                <label class="checkbox-label"><input type="checkbox" id="opt-antidump" checked> Anti-Dump & Lunr Guard</label>
-            </div>
-            <div class="presets-group">
-                <button class="preset-btn" onclick="loadPreset('print')">Preset Print</button>
-                <button class="preset-btn" onclick="loadPreset('ui')">Preset UI Lib</button>
-                <button class="preset-btn" onclick="clearAll()">Limpiar</button>
-            </div>
-        </div>
+    // Convierte un número a base 17 usando el alfabeto
+    function toSym(n) {
+      if (n === 0) return ALPHABET[0];
+      let s = "";
+      while (n > 0) {
+        s = ALPHABET[n % BASE] + s;
+        n = Math.floor(n / BASE);
+      }
+      return s;
+    }
 
-        <!-- Paneles de edición -->
-        <div class="editors-grid">
-            <div class="editor">
-                <div class="editor-top">INPUT_SCRIPT.LUA</div>
-                <textarea id="input" spellcheck="false" placeholder="-- Pega tu script aquí..."></textarea>
-            </div>
-            <div class="editor">
-                <div class="editor-top">
-                    OUTPUT_OBFUSCATED.LUA (1 Single Line)
-                    <span class="copy-btn" onclick="copyCode()">[ Copiar ]</span>
-                </div>
-                <textarea id="output" readonly spellcheck="false" wrap="off" placeholder="El código ofuscado aparecerá aquí en una sola línea..."></textarea>
-            </div>
-        </div>
+    function obfuscate() {
+      const src = document.getElementById("in").value;
+      const bytes = [];
+      for (let i = 0; i < src.length; i++) {
+        bytes.push(src.charCodeAt(i));
+      }
+      // Cada byte -> símbolo en base 17, separados por un marcador
+      const encoded = bytes.map(b => toSym(b)).join("¨¨"); // ¨¨ como separador
+      const payload = encoded;
 
-        <div class="action-container">
-            <button class="action-btn" onclick="generateObfuscation()">OFUSCAR SCRIPT SIN ERRORES</button>
-        </div>
+      const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Script Ofuscado</title>
+</head>
+<body>
+<script>
+// Decodificador Luau embebido
+const ALPHABET = ${JSON.stringify(ALPHABET)};
+const BASE = ALPHABET.length;
+const payload = ${JSON.stringify(payload)};
 
-        <div class="footer-status">
-            <span id="status">Estado: Listo para procesar.</span>
-            <span id="stats">Caracteres: 0</span>
-        </div>
-    </div>
+function fromSym(s) {
+  let n = 0;
+  for (let i = 0; i < s.length; i++) {
+    n = n * BASE + ALPHABET.indexOf(s[i]);
+  }
+  return n;
+}
 
-    <div id="toast">¡Acción realizada con éxito!</div>
+const parts = payload.split("¨¨");
+let code = "";
+for (const p of parts) {
+  code += String.fromCharCode(fromSym(p));
+}
 
-    <script>
-        function showToast(message) {
-            const toast = document.getElementById('toast');
-            toast.innerText = message;
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 2500);
-        }
+// Ejecutar (en navegador usa eval; en Luau usarías loadstring)
+eval(code);
+<\\/script>
+</body>
+</html>`;
 
-        function loadPreset(type) {
-            const input = document.getElementById('input');
-            if(type === 'print') {
-                input.value = 'print("¡Hola desde Qyrex Obfuscator v1.1.1!")\nlocal mensaje = "Sistema funcionando al 100%"\nprint(mensaje)';
-            } else if(type === 'ui') {
-                input.value = 'local ScreenGui = Instance.new("ScreenGui")\nScreenGui.Name = "QyrexUI"\nprint("UI Cargada correctamente")';
-            }
-            document.getElementById('stats').innerText = `Caracteres: ${input.value.length}`;
-        }
+      document.getElementById("out").value = html;
+    }
 
-        function clearAll() {
-            document.getElementById('input').value = '';
-            document.getElementById('output').value = '';
-            document.getElementById('status').innerText = "Estado: Limpio.";
-            document.getElementById('stats').innerText = "Caracteres: 0";
-            showToast("¡Campos limpiados!");
-        }
-
-        document.getElementById('input').addEventListener('input', (e) => {
-            document.getElementById('stats').innerText = `Caracteres: ${e.target.value.length}`;
-        });
-
-        function generateObfuscation() {
-            let code = document.getElementById('input').value;
-            if(!code.trim()) {
-                alert("¡Ingresa un script válido para ofuscar!");
-                return;
-            }
-
-            const useXor = document.getElementById('opt-xor').checked;
-            const useMangle = document.getElementById('opt-mangle').checked;
-            const useAntiDump = document.getElementById('opt-antidump').checked;
-
-            try {
-                // 1. Limpieza de comentarios
-                code = code.replace(/--\[\[[\s\S]*?\]\]/g, '').replace(/--.*/g, '');
-
-                // 2. Mangling seguro de variables locales
-                if(useMangle) {
-                    const varMatches = code.match(/\blocal\s+([a-zA-Z_][a-zA-Z0-9_]*)/g);
-                    if(varMatches) {
-                        varMatches.forEach((match) => {
-                            const varName = match.replace('local', '').trim();
-                            if(varName.length > 1 && varName !== 'game' && varName !== 'script' && varName !== 'workspace') {
-                                const fakeName = '_0x' + Math.random().toString(16).substring(2, 8);
-                                const regex = new RegExp('\\b' + varName + '\\b', 'g');
-                                code = code.replace(regex, fakeName);
-                            }
-                        });
-                    }
-                }
-
-                // 3. Conversión estricta a bytes seguros (evita cualquier error de escape en cadenas)
-                let key = Math.floor(Math.random() * 200) + 10;
-                let bytes = [];
-                for (let i = 0; i < code.length; i++) {
-                    let c = code.charCodeAt(i);
-                    if(useXor) c = c ^ key;
-                    bytes.push(c);
-                }
-
-                const bytesString = bytes.join(',');
-
-                // 4. Estructura Anti-Dump oficial Qyrex v1.1.1 con control de errores Lunr
-                let protectionStub = useAntiDump ? `local g=getfenv or function()return _ENV end;local e=g();local c=function(f)if type(f)=="function"then local s,r=pcall(function()return string.dump(f)end);if s then error("lunr: The bot was unable to process the file fully, however it recovered a part of the file:")end;end;end;if e.debug and e.debug.getinfo then local s,r=pcall(function()return e.debug.getinfo(1)end);if not s or r.what~="C"then error("lunr: The bot was unable to process the file fully, however it recovered a part of the file:")end;end;if e.hookfunction or e.hookmetamethod or e.newcclosure or e.Luraph then error("lunr: The bot was unable to process the file fully, however it recovered a part of the file:")end;` : `local c=function()end;`;
-
-                // 5. Motor de decodificación en una sola línea a prueba de fallos
-                let decoderLogic = useXor 
-                    ? `local t={${bytesString}};local b={};for i=1,#t do b[i]=string.char(t[i]~${key})end;return loadstring(table.concat(b))()`
-                    : `return loadstring(string.char(${bytesString}))()`;
-
-                // 6. Ensamblaje final de la carga útil
-                const finalPayload = `--[[ This file was protected using Qyrex Obfuscator v1.1.1[https://qyrex.hopto.org/] ]] return setmetatable({QA=function(r,q,i,I,E,d,B)if E<=89 then local j=i+1;local G=r[116](B,j);return not not(G>=128)and 43 or 181,q,j,G;elseif E<=90 then local E=1+i;local j=r[116](B,E);return not(128>j)and 11 or 45,E,j,I;else local E,B,j,G=r[116](d,3),q-128,128*(i-128),2097152*(I-128);return 60,E%128*16384+(E-E%128)*2097152+(j+(B+G)),4,I;end;end},{__call=function(VM)${protectionStub}${decoderLogic}end})()`;
-
-                document.getElementById('output').value = finalPayload;
-                document.getElementById('status').innerText = `Estado: Éxito total (${code.length} caracteres ofuscados en 1 línea).`;
-                showToast("¡Script ofuscado correctamente sin errores!");
-
-            } catch (err) {
-                console.error(err);
-                alert("Ocurrió un error al procesar el script: " + err.message);
-            }
-        }
-
-        function copyCode() {
-            const outputBox = document.getElementById('output');
-            if(!outputBox.value) {
-                alert("¡No hay código para copiar!");
-                return;
-            }
-            outputBox.select();
-            document.execCommand('copy');
-            showToast("¡Código copiado al portapapeles!");
-        }
-    </script>
+    function copyOut() {
+      const el = document.getElementById("out");
+      el.select();
+      document.execCommand("copy");
+    }
+  </script>
 </body>
 </html>
