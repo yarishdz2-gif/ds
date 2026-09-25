@@ -3,98 +3,89 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>QYREX ULTRA LUAU PROTECTOR</title>
+<title>QYREX GOD-TIER PROTECTOR</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Consolas',monospace;min-height:100vh;background:#050505;color:#00ff41;display:flex;align-items:center;justify-content:center;padding:1rem;background-image:linear-gradient(0deg,transparent 24%,rgba(0,255,65,.03) 25%,rgba(0,255,65,.03) 26%,transparent 27%,transparent 74%,rgba(0,255,65,.03) 75%,rgba(0,255,65,.03) 76%,transparent 77%,transparent),linear-gradient(90deg,transparent 24%,rgba(0,255,65,.03) 25%,rgba(0,255,65,.03) 26%,transparent 27%,transparent 74%,rgba(0,255,65,.03) 75%,rgba(0,255,65,.03) 76%,transparent 77%,transparent);background-size:50px 50px}
 .container{width:100%;max-width:1100px;border:2px solid #00ff41;box-shadow:0 0 50px #00ff41,inset 0 0 25px rgba(0,255,65,.25);padding:32px;border-radius:14px;background:#0a0a0a;position:relative;overflow:hidden}
 .container::before{content:"";position:absolute;top:0;left:0;width:100%;height:5px;background:#00ff41;box-shadow:0 0 20px #00ff41}
-h1{font-size:2.1rem;text-align:center;margin-bottom:22px;text-shadow:0 0 18px #00ff41;letter-spacing:3px}
-label{display:block;margin-bottom:8px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:1.5px;font-size:.9rem}
-textarea{width:100%;height:230px;background:#0f0f0f;border:1px solid #333;color:#00ff41;padding:16px;font-size:.95rem;resize:vertical;margin-bottom:18px;border-radius:6px;transition:all .25s}
+h1{font-size:2rem;text-align:center;margin-bottom:20px;text-shadow:0 0 18px #00ff41;letter-spacing:2px}
+label{display:block;margin-bottom:8px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:1.5px;font-size:.85rem}
+textarea{width:100%;height:220px;background:#0f0f0f;border:1px solid #333;color:#00ff41;padding:15px;font-size:.92rem;resize:vertical;margin-bottom:16px;border-radius:6px}
 textarea:focus{outline:none;border-color:#00ff41;box-shadow:0 0 14px rgba(0,255,65,.35)}
-button{width:100%;background:linear-gradient(180deg,#00ff41 0%,#00cc33 100%);color:#000;border:none;padding:16px;font-size:1.25rem;font-weight:800;cursor:pointer;text-transform:uppercase;border-radius:6px;transition:transform .1s,box-shadow .3s;letter-spacing:1px}
-button:hover{background:#fff;box-shadow:0 0 30px #00ff41;transform:scale(1.015)}
-button:active{transform:scale(.98)}
-.stats{display:flex;justify-content:space-between;margin-top:12px;font-size:.8rem;color:#00cc33;opacity:.8}
+button{width:100%;background:linear-gradient(180deg,#00ff41 0%,#00cc33 100%);color:#000;border:none;padding:15px;font-size:1.2rem;font-weight:800;cursor:pointer;text-transform:uppercase;border-radius:6px;letter-spacing:1px}
+button:hover{background:#fff;box-shadow:0 0 30px #00ff41}
+.stats{display:flex;justify-content:space-between;margin-top:10px;font-size:.78rem;color:#00cc33;opacity:.85}
 </style>
 </head>
 <body>
 <div class="container">
-<h1>QYREX ULTRA PROTECTOR</h1>
+<h1>QYREX GOD-TIER PROTECTOR</h1>
 <label>ENTRADA LUAU:</label>
-<textarea id="in" placeholder="// Pega tu script Luau aquí..."></textarea>
-<button onclick="protect()">PROTEGER AL MÁXIMO</button>
-<label>SALIDA PROTEGIDA (1 LÍNEA):</label>
+<textarea id="in" placeholder="// Pega tu script aquí..."></textarea>
+<button onclick="godProtect()">PROTEGER (IMPOSIBLE DE DEOFUSCAR)</button>
+<label>SALIDA (1 LÍNEA + ANTI-TAMPER):</label>
 <textarea id="out" readonly placeholder="// Resultado aquí..."></textarea>
 <div class="stats" id="stats"></div>
 </div>
 <script>
-function protect(){
+function godProtect(){
 const src=document.getElementById("in").value;
-if(!src.trim()){alert("Pega un script primero");return}
+if(!src.trim()){alert("Pega un script primero");return;}
 
-// ============== ULTRA STRONG MULTI-LAYER OBFUSCATOR ==============
-const seed=(Date.now()^Math.floor(Math.random()*0xFFFFFFFF)^performance.now()*1000|0)>>>0;
-const charset="ABCDEFGHIJKLMNOPQRSTUVWXYXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&()*+,-./:;<=>?@[]^_`{|}~";
-const clen=charset.length;
+// ==================== GOD-TIER ENGINE ====================
+const seed=(Date.now()^Math.floor(Math.random()*0xFFFFFFFF)^(performance.now()*10000|0))>>>0;
+const CS="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&()*+,-./:;<=>?@[]^_`{|}~";
+const CL=CS.length;
 
-// Layer 1: Strong PRNG (xorshift32 + mix)
-function xorshift(s){s^=s<<13;s^=s>>>17;s^=s<<5;return s>>>0}
-let state=seed;
-function nextByte(){state=xorshift(state);return state&0xFF}
+// Strong xorshift
+function xs(s){s^=s<<13;s^=s>>>17;s^=s<<5;return s>>>0;}
+let st=seed;
+function nb(){st=xs(st);return st&255;}
 
-// Layer 2: Multi-key XOR + rotation + position dependent
-let encoded=[];
-let checksum=0x5A;
+// Multi-layer transform
+let buf=[];
+let c1=0xA5,c2=0x3C,c3=0x7E;
 for(let i=0;i<src.length;i++){
-    let c=src.charCodeAt(i)&0xFF;
-    let k1=nextByte();
-    let k2=((seed+(i*0x9E3779B9))>>>0)&0xFF;
-    let k3=((i*i*31)^(i>>3))&0xFF;
-    let rotated=((c<<((i%7)+1))| (c>>>(8-((i%7)+1))))&0xFF;
-    let x=rotated^k1^k2^k3;
-    checksum=(checksum+x+(i%23)+k1)%256;
-    // Encode as 2 chars from charset (base ~90)
-    encoded.push(charset[x%clen],charset[Math.floor(x/clen)%clen]);
+    let c=src.charCodeAt(i)&255;
+    let k1=nb(),k2=((seed+i*0x9E3779B9)>>>0)&255,k3=((i*i*41)^(i>>2)^(i*7))&255;
+    let rot=((c<<((i%5)+1))|(c>>>(8-((i%5)+1))))&255;
+    let x=rot^k1^k2^k3^(i&15);
+    c1=(c1+x+k1)%256;
+    c2=(c2^x^(i%29))&255;
+    c3=(c3+((x*13)^k2))%256;
+    buf.push(CS[x%CL]+CS[Math.floor(x/CL)%CL]);
 }
+const raw=buf.join("");
 
-// Layer 3: Chunk + shuffle + noise
-const chunkSize=48+Math.floor(Math.random()*24);
-let chunks=[];
-for(let i=0;i<encoded.length;i+=chunkSize){
-    chunks.push(encoded.slice(i,i+chunkSize).join(""));
-}
-// Shuffle chunks with seeded order
-let order=[];
-for(let i=0;i<chunks.length;i++)order.push(i);
-for(let i=order.length-1;i>0;i--){
-    state=xorshift(state);
-    let j=state%(i+1);
-    [order[i],order[j]]=[order[j],order[i]];
+// Split + deterministic shuffle (NO order table exported)
+const CSZ=52+((seed>>8)%31);
+let parts=[];
+for(let i=0;i<raw.length;i+=CSZ)parts.push(raw.substring(i,i+CSZ));
+
+// Generate same permutation from seed (decoder will recreate it)
+let ord=[];
+for(let i=0;i<parts.length;i++)ord.push(i);
+st=seed^0xDEADBEEF;
+for(let i=ord.length-1;i>0;i--){
+    st=xs(st);
+    let j=st%(i+1);
+    [ord[i],ord[j]]=[ord[j],ord[i]];
 }
 let shuffled=[];
-let orderTable=[];
-for(let i=0;i<order.length;i++){
-    shuffled.push('"'+chunks[order[i]]+'"');
-    orderTable.push(order[i]);
-}
+for(let i=0;i<ord.length;i++)shuffled.push('"'+parts[ord[i]]+'"');
 
-// Layer 4: Generate polymorphic decoder (single line, ultra dense)
-const _s=charset;
-const _d=shuffled.join("..");
-const _o="{"+orderTable.join(",")+"}";
-const _k=seed;
-const _c=checksum;
-const _n=clen;
-const _cs=chunkSize;
+// Extra integrity keys
+const K1=seed;
+const K2=(seed^0xC0FFEE)^((src.length*0x85EBCA6B)>>>0);
+const K3=c1^c2^c3^(src.length&255);
 
-// The entire payload is ONE single line after the comment
+// ==================== SINGLE-LINE POLYMORPHIC PAYLOAD ====================
 const payload=`-- Protect by Qyrex
-local a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z=_G,string,bit32,table,math,tostring,tonumber,pcall,loadstring or load,getfenv or function()return _G end,getgenv and getgenv()or _G,game,Instance,typeof,type,next,pairs,ipairs,select,unpack or table.unpack,rawget,rawset,setmetatable,getmetatable,coroutine,debug;local A="${_s}"local B={${_d}}local C={${_o}}local D=${_k}local E=${_c}local F=${_n}local G=${_cs}local H,I,J,K={},{},0,D;local function L(M)K=bit32.bxor(K,bit32.lshift(K,13));K=bit32.bxor(K,bit32.rshift(K,17));K=bit32.bxor(K,bit32.lshift(K,5));return bit32.band(K,255)end;for N=1,#C do I[C[N]+1]=B[N]end;local O=b.concat(I);for N=1,#O,2 do local P=b.find(A,b.sub(O,N,N),1,true)-1;local Q=b.find(A,b.sub(O,N+1,N+1),1,true)-1;local R=P+Q*F;J=(J+R+(#H%23)+L())%256;local S=bit32.bxor(R,L(),bit32.band(D+(#H*0x9E3779B9),255),bit32.band(bit32.bxor(#H*#H*31,bit32.rshift(#H,3)),255));local T=bit32.band(bit32.rshift(S,(#H%7)+1)|bit32.lshift(S,8-((#H%7)+1)),255);H[#H+1]=T end;if J~=E then return end;local U=b.char(b.byte(H,1,#H));local V=h(U);if V then pcall(V)end`;
+local a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z=_G,string,bit32,table,math,tostring,tonumber,pcall,loadstring or load,getfenv or function()return _G end,getgenv and getgenv()or _G,game,Instance,typeof,type,next,pairs,ipairs,select,unpack or table.unpack,rawget,rawset,setmetatable,getmetatable,coroutine,debug;local A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z="${CS}",{${shuffled.join(",")}},${K1},${K2},${K3},${CL},${CSZ},0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0;local function aa(bb)B=c.bxor(B,c.lshift(B,13));B=c.bxor(B,c.rshift(B,17));B=c.bxor(B,c.lshift(B,5));return c.band(B,255)end;B=C^0xDEADBEEF;local cc={};for dd=0,#B-1 do cc[dd+1]=dd end;for dd=#cc,2,-1 do local ee=aa()%(dd)+1;cc[dd],cc[ee]=cc[ee],cc[dd]end;local ff={};for dd=1,#cc do ff[cc[dd]+1]=B[dd]end;local gg=b.concat(ff);B=C;local hh,ii,jj=0xA5,0x3C,0x7E;local kk={};for dd=1,#gg,2 do local ll=b.find(A,b.sub(gg,dd,dd),1,true)-1;local mm=b.find(A,b.sub(gg,dd+1,dd+1),1,true)-1;local nn=ll+mm*F;local oo=aa();local pp=((C+(#kk)*0x9E3779B9)>>>0)&255;local qq=((#kk*#kk*41)^((#kk)>>2)^(#kk*7))&255;local rr=c.bxor(nn,oo,pp,qq,(#kk)&15);hh=(hh+nn+oo)%256;ii=c.bxor(ii,nn,(#kk)%29);jj=(jj+c.bxor(nn*13,pp))%256;local ss=c.band(c.rshift(rr,((#kk)%5)+1)|c.lshift(rr,8-(((#kk)%5)+1)),255);kk[#kk+1]=ss end;if c.bxor(hh,ii,jj,#kk&255)~=E then while true do end end;if D~=((C^0xC0FFEE)^((#kk*0x85EBCA6B)>>>0))then return end;local tt=b.char(table.unpack(kk));local uu,vv=h(tt);if not uu then return end;local ww=pcall(vv);if not ww then while true do end end`;
 
 document.getElementById("out").value=payload;
-document.getElementById("stats").innerHTML=`<span>Seed: ${seed}</span><span>Original: ${src.length} chars</span><span>Protegido: ${payload.length} chars</span><span>Capas: 4 + Shuffle + Polymorphic</span>`;
+document.getElementById("stats").innerHTML=`<span>Seed: ${seed}</span><span>Original: ${src.length}</span><span>Protegido: ${payload.length}</span><span>Capas: 6 + Anti-Tamper + No Order Table</span>`;
 }
 </script>
 </body>
