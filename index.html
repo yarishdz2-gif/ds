@@ -3,89 +3,91 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>QYREX GOD-TIER PROTECTOR</title>
+<title>Qyrex Hard</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Consolas',monospace;min-height:100vh;background:#050505;color:#00ff41;display:flex;align-items:center;justify-content:center;padding:1rem;background-image:linear-gradient(0deg,transparent 24%,rgba(0,255,65,.03) 25%,rgba(0,255,65,.03) 26%,transparent 27%,transparent 74%,rgba(0,255,65,.03) 75%,rgba(0,255,65,.03) 76%,transparent 77%,transparent),linear-gradient(90deg,transparent 24%,rgba(0,255,65,.03) 25%,rgba(0,255,65,.03) 26%,transparent 27%,transparent 74%,rgba(0,255,65,.03) 75%,rgba(0,255,65,.03) 76%,transparent 77%,transparent);background-size:50px 50px}
-.container{width:100%;max-width:1100px;border:2px solid #00ff41;box-shadow:0 0 50px #00ff41,inset 0 0 25px rgba(0,255,65,.25);padding:32px;border-radius:14px;background:#0a0a0a;position:relative;overflow:hidden}
-.container::before{content:"";position:absolute;top:0;left:0;width:100%;height:5px;background:#00ff41;box-shadow:0 0 20px #00ff41}
-h1{font-size:2rem;text-align:center;margin-bottom:20px;text-shadow:0 0 18px #00ff41;letter-spacing:2px}
-label{display:block;margin-bottom:8px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:1.5px;font-size:.85rem}
-textarea{width:100%;height:220px;background:#0f0f0f;border:1px solid #333;color:#00ff41;padding:15px;font-size:.92rem;resize:vertical;margin-bottom:16px;border-radius:6px}
-textarea:focus{outline:none;border-color:#00ff41;box-shadow:0 0 14px rgba(0,255,65,.35)}
-button{width:100%;background:linear-gradient(180deg,#00ff41 0%,#00cc33 100%);color:#000;border:none;padding:15px;font-size:1.2rem;font-weight:800;cursor:pointer;text-transform:uppercase;border-radius:6px;letter-spacing:1px}
-button:hover{background:#fff;box-shadow:0 0 30px #00ff41}
-.stats{display:flex;justify-content:space-between;margin-top:10px;font-size:.78rem;color:#00cc33;opacity:.85}
+body{font-family:Consolas,monospace;background:#09090b;color:#ececee;padding:1.5rem}
+textarea{width:100%;height:210px;background:#0c0c0e;border:1px solid #2a2a30;color:#3dba7a;padding:.9rem;border-radius:10px;margin:.4rem 0 1rem}
+button{width:100%;padding:.9rem;border:0;border-radius:10px;background:#3dba7a;color:#05210f;font-weight:700;cursor:pointer}
+label{font-size:.75rem;color:#8c8c94;text-transform:uppercase;letter-spacing:.08em}
+.stats{font-size:.75rem;color:#8c8c94;margin-top:.6rem}
 </style>
 </head>
 <body>
-<div class="container">
-<h1>QYREX GOD-TIER PROTECTOR</h1>
-<label>ENTRADA LUAU:</label>
-<textarea id="in" placeholder="// Pega tu script aquí..."></textarea>
-<button onclick="godProtect()">PROTEGER (IMPOSIBLE DE DEOFUSCAR)</button>
-<label>SALIDA (1 LÍNEA + ANTI-TAMPER):</label>
-<textarea id="out" readonly placeholder="// Resultado aquí..."></textarea>
+<label>Entrada Luau</label>
+<textarea id="in"></textarea>
+<button onclick="go()">Proteger (anti-tamper)</button>
+<label>Salida</label>
+<textarea id="out" readonly></textarea>
 <div class="stats" id="stats"></div>
-</div>
 <script>
-function godProtect(){
-const src=document.getElementById("in").value;
-if(!src.trim()){alert("Pega un script primero");return;}
+const CS="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%()*+,-./:;<=>?@^_{}~",CL=CS.length;
+const GOLDEN=2654435769,C0FFEE=12648430,MURMUR=2246822515,DEAD=3735928559;
+const u32=n=>n>>>0;
+const xs=s=>{s=u32(s);s=u32(s^u32(s<<13));s=u32(s^(s>>>17));s=u32(s^u32(s<<5));return s};
+const rotl8=(v,n)=>{v&=255;n%=8;return((v<<n)|(v>>>(8-n)))&255};
 
-// ==================== GOD-TIER ENGINE ====================
-const seed=(Date.now()^Math.floor(Math.random()*0xFFFFFFFF)^(performance.now()*10000|0))>>>0;
-const CS="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&()*+,-./:;<=>?@[]^_`{|}~";
-const CL=CS.length;
-
-// Strong xorshift
-function xs(s){s^=s<<13;s^=s>>>17;s^=s<<5;return s>>>0;}
-let st=seed;
-function nb(){st=xs(st);return st&255;}
-
-// Multi-layer transform
-let buf=[];
-let c1=0xA5,c2=0x3C,c3=0x7E;
-for(let i=0;i<src.length;i++){
-    let c=src.charCodeAt(i)&255;
-    let k1=nb(),k2=((seed+i*0x9E3779B9)>>>0)&255,k3=((i*i*41)^(i>>2)^(i*7))&255;
-    let rot=((c<<((i%5)+1))|(c>>>(8-((i%5)+1))))&255;
-    let x=rot^k1^k2^k3^(i&15);
-    c1=(c1+x+k1)%256;
-    c2=(c2^x^(i%29))&255;
-    c3=(c3+((x*13)^k2))%256;
-    buf.push(CS[x%CL]+CS[Math.floor(x/CL)%CL]);
-}
-const raw=buf.join("");
-
-// Split + deterministic shuffle (NO order table exported)
-const CSZ=52+((seed>>8)%31);
-let parts=[];
-for(let i=0;i<raw.length;i+=CSZ)parts.push(raw.substring(i,i+CSZ));
-
-// Generate same permutation from seed (decoder will recreate it)
-let ord=[];
-for(let i=0;i<parts.length;i++)ord.push(i);
-st=seed^0xDEADBEEF;
-for(let i=ord.length-1;i>0;i--){
+function go(){
+  const src=document.getElementById("in").value;
+  if(!src.trim())return alert("Pega script");
+  const bytes=Array.from(new TextEncoder().encode(src));
+  let seed=u32(Date.now()^(Math.random()*0xFFFFFFFF)^((performance.now()*1000)|0))||1;
+  let st=seed,h1=165,h2=60,h3=126,enc="";
+  for(let i=0;i<bytes.length;i++){
     st=xs(st);
-    let j=st%(i+1);
-    [ord[i],ord[j]]=[ord[j],ord[i]];
-}
-let shuffled=[];
-for(let i=0;i<ord.length;i++)shuffled.push('"'+parts[ord[i]]+'"');
+    const k1=st&255,kb=u32(seed+i*GOLDEN)&255,kc=((i*i*41)^(i>>>2)^(i*7))&255;
+    const x=rotl8(bytes[i],(i%5)+1)^k1^kb^kc^(i&15);
+    h1=(h1+x+k1)%256;h2=(h2^x^(i%29))&255;h3=(h3+((x*13)^kb))%256;
+    enc+=CS[x%CL]+CS[Math.floor(x/CL)%CL];
+  }
+  const k3=(h1^h2^h3^(bytes.length&255))&255;
+  const k2=u32((seed^C0FFEE)^u32(bytes.length*MURMUR));
+  let extra=0;for(let i=0;i<enc.length;i++)extra=(extra+enc.charCodeAt(i)*(i+1))%10007;
+  const csz=52+((seed>>>8)%31),parts=[];
+  for(let i=0;i<enc.length;i+=csz)parts.push(enc.slice(i,i+csz));
+  const n=parts.length,order=Array.from({length:n},(_,i)=>i);
+  let sst=u32(seed^DEAD);
+  for(let i=n-1;i>0;i--){sst=xs(sst);const j=sst%(i+1);[order[i],order[j]]=[order[j],order[i]]}
+  const lit=order.map(i=>'"'+parts[i]+'"').join(",");
 
-// Extra integrity keys
-const K1=seed;
-const K2=(seed^0xC0FFEE)^((src.length*0x85EBCA6B)>>>0);
-const K3=c1^c2^c3^(src.length&255);
+  const body=[
+    'local S,B,T,P,LD,ty=string,bit32,table,pcall,loadstring or load,type',
+    'local function SK()pcall(print,"hahaha skidder noob")return end',
+    'if ty(B)~="table"or ty(P)~="function"or ty(LD)~="function"then return SK()end',
+    'if ty(S)~="table"and ty(S)~="userdata"then return SK()end',
+    'if B.bxor(90,65)~=27 or B.lshift(1,8)~=256 or B.rshift(256,8)~=1 then return SK()end',
+    'if B.band(255,170)~=170 or B.bxor(7,3)~=4 then return SK()end',
+    'local CS="'+CS+'" local CL='+CL+' local Q={'+lit+'}',
+    'local U='+u32(seed)+' local K2='+k2+' local K3='+k3+' local K4='+extra+' local M=255',
+    'if #CS~=CL then return SK()end',
+    'local function R(s)s=B.bxor(s,B.lshift(s,13))s=B.bxor(s,B.rshift(s,17))s=B.bxor(s,B.lshift(s,5))return s end',
+    'local n=#Q if n<1 then return SK()end local O={} for i=1,n do O[i]=i-1 end',
+    'local st=B.bxor(U,3735928559)',
+    'for i=n,2,-1 do st=R(st)local j=(st%i)+1 O[i],O[j]=O[j],O[i] end',
+    'local G={} for i=1,n do G[O[i]+1]=Q[i] end local blob=T.concat(G)',
+    'if B.band(#blob,1)~=0 or #blob<2 then return SK()end',
+    'local extra=0 for i=1,#blob do extra=(extra+S.byte(blob,i)*i)%10007 end',
+    'if extra~=K4 then return SK()end',
+    'st=U local h1,h2,h3=165,60,126 local bytes={} local idx=0',
+    'for p=1,#blob,2 do',
+    'local a=S.find(CS,S.sub(blob,p,p),1,true) local b=S.find(CS,S.sub(blob,p+1,p+1),1,true)',
+    'if not a or not b then return SK()end a,b=a-1,b-1 local x=a+b*CL',
+    'st=R(st) local k1=B.band(st,M) local kb=B.band(U+idx*2654435769,M)',
+    'local kc=B.band(B.bxor(idx*idx*41,B.bxor(B.rshift(idx,2),idx*7)),M)',
+    'h1=(h1+x+k1)%256 h2=B.bxor(h2,B.bxor(x,idx%29)) h3=(h3+B.bxor(x*13,kb))%256',
+    'local rr=B.bxor(B.bxor(B.bxor(B.bxor(x,k1),kb),kc),B.band(idx,15))',
+    'local amt=(idx%5)+1 local plain=B.band(B.bor(B.rshift(rr,amt),B.lshift(rr,8-amt)),M)',
+    'bytes[idx+1]=plain idx=idx+1 end',
+    'if idx<1 then return SK()end',
+    'if B.bxor(B.bxor(B.bxor(h1,h2),h3),B.band(idx,M))~=K3 then return SK()end',
+    'if K2~=B.bxor(B.bxor(U,12648430),idx*2246822515) then return SK()end',
+    'local out={} for i=1,idx do out[i]=S.char(bytes[i]) end local src=T.concat(out)',
+    'if #src~=idx then return SK()end',
+    'local ok,fn=P(LD,src) if not ok or ty(fn)~="function" then return SK()end P(fn)'
+  ].join(" ").replace(/\s+/g," ").trim();
 
-// ==================== SINGLE-LINE POLYMORPHIC PAYLOAD ====================
-const payload=`-- Protect by Qyrex
-local a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z=_G,string,bit32,table,math,tostring,tonumber,pcall,loadstring or load,getfenv or function()return _G end,getgenv and getgenv()or _G,game,Instance,typeof,type,next,pairs,ipairs,select,unpack or table.unpack,rawget,rawset,setmetatable,getmetatable,coroutine,debug;local A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z="${CS}",{${shuffled.join(",")}},${K1},${K2},${K3},${CL},${CSZ},0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0;local function aa(bb)B=c.bxor(B,c.lshift(B,13));B=c.bxor(B,c.rshift(B,17));B=c.bxor(B,c.lshift(B,5));return c.band(B,255)end;B=C^0xDEADBEEF;local cc={};for dd=0,#B-1 do cc[dd+1]=dd end;for dd=#cc,2,-1 do local ee=aa()%(dd)+1;cc[dd],cc[ee]=cc[ee],cc[dd]end;local ff={};for dd=1,#cc do ff[cc[dd]+1]=B[dd]end;local gg=b.concat(ff);B=C;local hh,ii,jj=0xA5,0x3C,0x7E;local kk={};for dd=1,#gg,2 do local ll=b.find(A,b.sub(gg,dd,dd),1,true)-1;local mm=b.find(A,b.sub(gg,dd+1,dd+1),1,true)-1;local nn=ll+mm*F;local oo=aa();local pp=((C+(#kk)*0x9E3779B9)>>>0)&255;local qq=((#kk*#kk*41)^((#kk)>>2)^(#kk*7))&255;local rr=c.bxor(nn,oo,pp,qq,(#kk)&15);hh=(hh+nn+oo)%256;ii=c.bxor(ii,nn,(#kk)%29);jj=(jj+c.bxor(nn*13,pp))%256;local ss=c.band(c.rshift(rr,((#kk)%5)+1)|c.lshift(rr,8-(((#kk)%5)+1)),255);kk[#kk+1]=ss end;if c.bxor(hh,ii,jj,#kk&255)~=E then while true do end end;if D~=((C^0xC0FFEE)^((#kk*0x85EBCA6B)>>>0))then return end;local tt=b.char(table.unpack(kk));local uu,vv=h(tt);if not uu then return end;local ww=pcall(vv);if not ww then while true do end end`;
-
-document.getElementById("out").value=payload;
-document.getElementById("stats").innerHTML=`<span>Seed: ${seed}</span><span>Original: ${src.length}</span><span>Protegido: ${payload.length}</span><span>Capas: 6 + Anti-Tamper + No Order Table</span>`;
+  const payload="-- Protect by Qyrex\n"+body;
+  document.getElementById("out").value=payload;
+  document.getElementById("stats").textContent="seed="+seed+" bytes="+bytes.length+" out="+payload.length;
 }
 </script>
 </body>
