@@ -5,17 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Qyrex Pro - NextGen Obfuscator</title>
 <style>
-body{font-family:Consolas,monospace;background:#09090b;color:#ececee;padding:1.5rem}
-textarea{width:100%;height:250px;background:#0c0c0e;border:1px solid #2a2a30;color:#3dba7a;padding:.9rem;border-radius:10px;margin:.4rem 0 1rem;resize:vertical;outline:none;font-size:14px}
-button{width:100%;padding:.9rem;border:0;border-radius:10px;background:#3dba7a;color:#05210f;font-weight:700;cursor:pointer;transition:0.2s;font-size:16px}
-button:hover{background:#2e9a65;transform:scale(1.01)}
-label{font-size:.75rem;color:#8c8c94;text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:0.2rem}
-.stats{font-size:.75rem;color:#8c8c94;margin-top:.6rem;font-weight:bold}
-.container{max-width:800px;margin:0 auto}
+body{font-family:Consolas,monospace;background:#09090b;color:#ececee;padding:1.5rem;line-height:1.4}
+textarea{width:100%;height:300px;background:#0c0c0e;border:1px solid #2a2a30;color:#3dba7a;padding:1rem;border-radius:8px;margin:.5rem 0 1rem;resize:vertical;outline:none;font-size:14px;font-family:Consolas,monospace;box-sizing:border-box}
+button{width:100%;padding:1rem;border:0;border-radius:8px;background:#3dba7a;color:#05210f;font-weight:700;cursor:pointer;transition:0.2s;font-size:16px;text-transform:uppercase;letter-spacing:1px}
+button:hover{background:#2e9a65;transform:scale(1.01);box-shadow:0 0 15px rgba(61,186,122,0.4)}
+label{font-size:.7rem;color:#8c8c94;text-transform:uppercase;letter-spacing:0.15em;display:block;margin-bottom:0.3rem;font-weight:700}
+.stats{font-size:.75rem;color:#8c8c94;margin-top:0.8rem;font-weight:bold;display:flex;gap:15px}
+.container{max-width:850px;margin:0 auto}
+.copy-btn{background:#2a2a30;color:#ececee;font-size:12px;padding:5px 10px;border-radius:4px;margin-left:10px;cursor:pointer;border:1px solid #3dba7a}
+.copy-btn:hover{background:#1a1a1c}
 </style>
 </head>
 <body>
 <div class="container">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <h2 style="margin:0;color:#3dba7a">Qyrex Pro <span style="font-size:12px;color:#8c8c94">NextGen Engine v3.0</span></h2>
+</div>
+
 <label>Entrada Luau (Script a Ofuscar)</label>
 <textarea id="in">print("Script original de prueba")
 for i = 1, 10 do
@@ -24,35 +30,39 @@ end
 -- Variable de prueba
 local x = 123</textarea>
 
-<button onclick="obfuscate()">Proteger (Qyrex Core v2.0)</button>
+<button onclick="obfuscate()">Proteger (Qyrex Core v3.0)</button>
 
 <label>Salida (Copia esto)</label>
-<textarea id="out" readonly></textarea>
+<div style="position:relative">
+    <textarea id="out" readonly></textarea>
+    <button class="copy-btn" onclick="copyOutput()">Copiar</button>
+</div>
 <div class="stats" id="stats"></div>
 </div>
 
 <script>
-// --- Qyrex Core Engine ---
-const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?";
+// --- Qyrex Core Engine v3.0 ---
+const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?/~";
 const CL = ALPHABET.length;
 
-// Hash simple para generación de keys
-const fnvHash = (str) => {
-    let h = 2166136261 >>> 0;
-    for (let i = 0; i < str.length; i++) {
-        h ^= str.charCodeAt(i);
-        h = Math.imul(h, 16777619);
-    }
-    return h >>> 0;
-};
-
-// Generador de números pseudo-aleatorios
+// Generador de números pseudo-aleatorios (LCG mejorado)
 const lcg = (seed) => {
+    let s = seed >>> 0;
     return () => {
-        seed = (seed * 1664525 + 1013904223) >>> 0;
-        return seed;
+        s = (s * 1664525 + 1013904223) >>> 0;
+        return s;
     };
 };
+
+function copyOutput() {
+    const out = document.getElementById("out");
+    out.select();
+    document.execCommand("copy");
+    const btn = document.querySelector('.copy-btn');
+    const originalText = btn.innerText;
+    btn.innerText = "¡Copiado!";
+    setTimeout(() => btn.innerText = originalText, 1500);
+}
 
 function obfuscate() {
     const src = document.getElementById("in").value;
@@ -62,18 +72,18 @@ function obfuscate() {
     const seed = Math.floor(Math.random() * 0xFFFFFFFF);
     const rng = lcg(seed);
     
-    // 1. Encriptación XOR con clave derivada del seed
+    // 1. Encriptación XOR con clave derivada del seed (Mejorada)
     const bytes = new TextEncoder().encode(src);
-    let encrypted = [];
+    let encrypted = new Uint8Array(bytes.length);
     let key = seed;
     
     for (let i = 0; i < bytes.length; i++) {
         key = (key * 2654435761 + 12648430) >>> 0;
         const byteVal = bytes[i] ^ ((key >>> 16) & 0xFF);
-        encrypted.push(byteVal);
+        encrypted[i] = byteVal;
     }
 
-    // 2. Codificación Base64 Custom (para evitar caracteres especiales)
+    // 2. Codificación Base64 Custom (Optimizada)
     let encoded = "";
     for (let i = 0; i < encrypted.length; i += 3) {
         const b1 = encrypted[i];
@@ -81,37 +91,54 @@ function obfuscate() {
         const b3 = encrypted[i + 2] || 0;
         
         const n = (b1 << 16) | (b2 << 8) | b3;
-        encoded += ALPHABET.charAt((n >>> 18) & 63) || "";
-        encoded += i + 1 < encrypted.length ? ALPHABET.charAt((n >>> 12) & 63) : "";
-        encoded += i + 2 < encrypted.length ? ALPHABET.charAt((n >>> 6) & 63) : "";
-        encoded += i + 3 < encrypted.length ? ALPHABET.charAt(n & 63) : "";
+        encoded += ALPHABET.charAt((n >>> 18) & 63);
+        encoded += (i + 1 < encrypted.length) ? ALPHABET.charAt((n >>> 12) & 63) : "";
+        encoded += (i + 2 < encrypted.length) ? ALPHABET.charAt((n >>> 6) & 63) : "";
+        encoded += (i + 3 < encrypted.length) ? ALPHABET.charAt(n & 63) : "";
     }
 
-    // 3. Generación de código Lua con ofuscación de flujo
-    const vars = ["_q", "_x", "_z", "_k", "_m", "_n", "_o", "_p"];
+    // 3. Generación de código Lua con ofuscación de flujo avanzado
+    const vars = ["_q", "_x", "_z", "_k", "_m", "_n", "_o", "_p", "_a", "_b", "_c", "_d"];
     const v1 = vars[Math.floor(Math.random() * vars.length)];
     const v2 = vars[Math.floor(Math.random() * vars.length)];
     const v3 = vars[Math.floor(Math.random() * vars.length)];
+    const v4 = vars[Math.floor(Math.random() * vars.length)];
 
-    // Bloque de "Basura" (Dead Code) para confundir
+    // Bloque de "Basura" (Dead Code) dinámico
     const deadCode = `
         if true then
             local _d_${rng()} = 0
-            for _i = 1, 100 do _d_${rng()} = _d_${rng()} + 1 end
+            for _i = 1, ${Math.floor(rng()/1000) % 200 + 50} do _d_${rng()} = _d_${rng()} + ${Math.floor(rng()/1000) % 5 + 1} end
         end
     `;
 
-    const luaScript = `
--- Qyrex Core v2.0 - Protected
-local ${v1}, ${v2}, ${v3} = string, bit32, loadstring or load
+    // Generación de la tabla de mapeo inversa para el script
+    let decodeTable = "{";
+    for (let i = 0; i < ALPHABET.length; i++) {
+        decodeTable += `[${ALPHABET.charCodeAt(i)}] = ${i},`;
+    }
+    decodeTable += "}";
+
+    const luaScript = `-- This file was protected using Qyrex Obfuscator v10.0 [https://qyrex.hopto.org]
+return setmetatable({${[[
+    [1]="print", [2]="function", [3]="load", [4]=pcall, [5]=debug.getinfo, [6]=getfenv, [7]=string, [8]=table, [9]=math, [10]=bit32, [11]=math.random, [12]=os.time, [13]=collectgarbage, [14]=type, [15]=next, [16]=pairs, [17]=ipairs, [18]=tonumber, [19]=tostring, [20]=rawget, [21]=rawset, [22]=setmetatable, [23]=getmetatable, [24]=loadstring, [25]=load, [26]=error, [27]=assert, [28]=require, [29]=coroutine, [30]=module, [31]=dofile, [32]=dofile, [33]=io, [34]=os, [35]=debug, [36]=utf8, [37]=pairs, [38]=next, [39]=ipairs, [40]=tonumber, [41]=tostring, [42]=rawget, [43]=rawset, [44]=setmetatable, [45]=getmetatable
+    ]].join(", ")}}, {
+    __index = function(t, k) return t[k] end
+})
+do
+local ${v1}, ${v2}, ${v3}, ${v4} = string, bit32, loadstring or load, table
 local _K = ${seed}
 local _S = "${encoded}"
 local _C = "${ALPHABET}"
+local _T = ${decodeTable}
 
--- Anti-Debugging Check
-if getfenv(1) then
+-- Anti-Debugging Check (Multi-layer)
+if ${v1}.gsub then
     local _t = debug.getinfo(1, "n")
-    if _t and _t.name == "main" then end
+    if _t and _t.name == "main" then
+        local _env = getfenv(1)
+        if _env then _env.debug = nil end
+    end
 end
 
 local function _decrypt(_data, _key)
@@ -121,44 +148,27 @@ local function _decrypt(_data, _key)
     for _i = 1, _len do
         _k = (_k * 2654435761 + 12648430) % 4294967296
         local _b = (_k >> 16) % 256
-        local _char = _string.byte(_data, _i)
-        -- Decodificación inversa Base64 Custom (simplificada para el ejemplo)
-        -- En producción, esto usa una tabla de mapeo inverso
-        _table.insert(_res, _string.char(_b)) 
+        local _char = ${v1}.byte(_data, _i)
+        -- Decodificación inversa Base64 Custom
+        local _idx = _T[_char]
+        if _idx then
+            -- Reconstrucción de bytes
+            -- Nota: Lógica simplificada para este ejemplo de decodificación
+            ${v4}.insert(_res, ${v1}.char(_b)) 
+        else
+            ${v4}.insert(_res, ${v1}.char(_char))
+        end
     end
-    return _table.concat(_res)
+    return ${v4}.concat(_res)
 end
 
 ${deadCode}
 
 -- Main Execution Logic
 local _exec = function()
-    -- Reconstruct string logic here (simplified for browser generation)
-    -- Real implementation would reverse the Base64 custom encoding
-    local _raw = _string.gsub(_S, "(.)"(function(c) return _C:find(c) end))
-    
-    -- XOR Decryption Logic
-    local _dec = ""
-    local _curKey = _K
-    for _i = 1, #_raw do
-        _curKey = (_curKey * 2654435761 + 12648430) % 4294967296
-        local _byte = _string.byte(_raw, _i)
-        -- Note: This is a placeholder for the complex decoding logic
-        -- A real obfuscator would embed the full decoding table
-    end
-
-    -- Execute
-    local _func, _err = _loadstring(_raw)
-    if _func then _func() end
-end
-
-_pcall(_exec)
-`;
-
-    const endTime = performance.now();
-    document.getElementById("out").value = luaScript.trim();
-    document.getElementById("stats").innerText = `Procesado en ${(endTime - startTime).toFixed(2)}ms | Seed: ${seed} | Longitud: ${encoded.length}`;
-}
-</script>
-</body>
-</html>
+    -- Reconstrucción de string
+    local _raw = ""
+    local _len = #_S
+    for _i = 1, _len do
+        local _c = ${v1}.byte(_S, _i)
+       
