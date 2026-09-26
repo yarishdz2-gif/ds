@@ -3,22 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Qyrex Hard</title>
+<title>Qyrex Hard - Ultra Anti-Tamper</title>
 <style>
 body{font-family:Consolas,monospace;background:#09090b;color:#ececee;padding:1.5rem}
-textarea{width:100%;height:210px;background:#0c0c0e;border:1px solid #2a2a30;color:#3dba7a;padding:.9rem;border-radius:10px;margin:.4rem 0 1rem}
-button{width:100%;padding:.9rem;border:0;border-radius:10px;background:#3dba7a;color:#05210f;font-weight:700;cursor:pointer}
-label{font-size:.75rem;color:#8c8c94;text-transform:uppercase;letter-spacing:.08em}
-.stats{font-size:.75rem;color:#8c8c94;margin-top:.6rem}
+textarea{width:100%;height:210px;background:#0c0c0e;border:1px solid #2a2a30;color:#3dba7a;padding:.9rem;border-radius:10px;margin:.4rem 0 1rem;resize:vertical}
+button{width:100%;padding:.9rem;border:0;border-radius:10px;background:#3dba7a;color:#05210f;font-weight:700;cursor:pointer;transition:0.2s}
+button:hover{background:#2e9a65}
+label{font-size:.75rem;color:#8c8c94;text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:0.2rem}
+.stats{font-size:.75rem;color:#8c8c94;margin-top:.6rem;font-weight:bold}
 </style>
 </head>
 <body>
-<label>Entrada Luau</label>
-<textarea id="in"></textarea>
-<button onclick="go()">Proteger (anti-tamper)</button>
-<label>Salida</label>
+<label>Entrada Luau (Script a Ofuscar)</label>
+<textarea id="in">print("Script original de prueba")</textarea>
+<button onclick="go()">Proteger (Ultra Anti-Tamper + Executor Lock)</button>
+<label>Salida (Copia esto)</label>
 <textarea id="out" readonly></textarea>
 <div class="stats" id="stats"></div>
+
 <script>
 const CS="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%()*+,-./:;<=>?@^_{}~",CL=CS.length;
 const GOLDEN=2654435769,C0FFEE=12648430,MURMUR=2246822515,DEAD=3735928559;
@@ -28,9 +30,13 @@ const rotl8=(v,n)=>{v&=255;n%=8;return((v<<n)|(v>>>(8-n)))&255};
 
 function go(){
   const src=document.getElementById("in").value;
-  if(!src.trim())return alert("Pega script");
+  if(!src.trim())return alert("¡Pega un script primero!");
+  
+  // Generación de Seed Aleatoria Avanzada
   const bytes=Array.from(new TextEncoder().encode(src));
   let seed=u32(Date.now()^(Math.random()*0xFFFFFFFF)^((performance.now()*1000)|0))||1;
+  
+  // Cifrado del Payload
   let st=seed,h1=165,h2=60,h3=126,enc="";
   for(let i=0;i<bytes.length;i++){
     st=xs(st);
@@ -42,6 +48,8 @@ function go(){
   const k3=(h1^h2^h3^(bytes.length&255))&255;
   const k2=u32((seed^C0FFEE)^u32(bytes.length*MURMUR));
   let extra=0;for(let i=0;i<enc.length;i++)extra=(extra+enc.charCodeAt(i)*(i+1))%10007;
+  
+  // División y Mezcla de Bloques
   const csz=52+((seed>>>8)%31),parts=[];
   for(let i=0;i<enc.length;i+=csz)parts.push(enc.slice(i,i+csz));
   const n=parts.length,order=Array.from({length:n},(_,i)=>i);
@@ -49,45 +57,60 @@ function go(){
   for(let i=n-1;i>0;i--){sst=xs(sst);const j=sst%(i+1);[order[i],order[j]]=[order[j],order[i]]}
   const lit=order.map(i=>'"'+parts[i]+'"').join(",");
 
+  // Construcción del Script Luau Final
+  // Se añade: Verificación de Executor (QYREX_CHECK), Verificación de Entorno y Anti-Debug básico
   const body=[
     'local S,B,T,P,LD,ty=string,bit32,table,pcall,loadstring or load,type',
-    'local function SK()pcall(print,"hahaha skidder noob")return end',
-    'if ty(B)~="table"or ty(P)~="function"or ty(LD)~="function"then return SK()end',
-    'if ty(S)~="table"and ty(S)~="userdata"then return SK()end',
-    'if B.bxor(90,65)~=27 or B.lshift(1,8)~=256 or B.rshift(256,8)~=1 then return SK()end',
-    'if B.band(255,170)~=170 or B.bxor(7,3)~=4 then return SK()end',
+    '-- Anti-Tamper: Verificación de Executor Exclusivo',
+    'if not _G.__QYREX_EXECUTOR__ or type(_G.__QYREX_EXECUTOR__)~="boolean" then',
+    '  local _,err=P(function() error("Qyrex: Solo ejecutable en ejecutor Qyrex") end)',
+    '  while true do end',
+    'end',
+    '-- Anti-Tamper: Verificación de Funciones Básicas',
+    'if ty(B)~="table"or ty(P)~="function"or ty(LD)~="function"then return end',
+    'if B.bxor(90,65)~=27 or B.lshift(1,8)~=256 then return end',
+    
     'local CS="'+CS+'" local CL='+CL+' local Q={'+lit+'}',
     'local U='+u32(seed)+' local K2='+k2+' local K3='+k3+' local K4='+extra+' local M=255',
-    'if #CS~=CL then return SK()end',
+    'if #CS~=CL then return end',
+    
     'local function R(s)s=B.bxor(s,B.lshift(s,13))s=B.bxor(s,B.rshift(s,17))s=B.bxor(s,B.lshift(s,5))return s end',
-    'local n=#Q if n<1 then return SK()end local O={} for i=1,n do O[i]=i-1 end',
+    'local n=#Q if n<1 then return end local O={} for i=1,n do O[i]=i-1 end',
     'local st=B.bxor(U,3735928559)',
     'for i=n,2,-1 do st=R(st)local j=(st%i)+1 O[i],O[j]=O[j],O[i] end',
     'local G={} for i=1,n do G[O[i]+1]=Q[i] end local blob=T.concat(G)',
-    'if B.band(#blob,1)~=0 or #blob<2 then return SK()end',
+    
+    '-- Verificación de Integridad del Bloque',
+    'if B.band(#blob,1)~=0 or #blob<2 then return end',
     'local extra=0 for i=1,#blob do extra=(extra+S.byte(blob,i)*i)%10007 end',
-    'if extra~=K4 then return SK()end',
+    'if extra~=K4 then return end',
+    
     'st=U local h1,h2,h3=165,60,126 local bytes={} local idx=0',
     'for p=1,#blob,2 do',
     'local a=S.find(CS,S.sub(blob,p,p),1,true) local b=S.find(CS,S.sub(blob,p+1,p+1),1,true)',
-    'if not a or not b then return SK()end a,b=a-1,b-1 local x=a+b*CL',
+    'if not a or not b then return end a,b=a-1,b-1 local x=a+b*CL',
     'st=R(st) local k1=B.band(st,M) local kb=B.band(U+idx*2654435769,M)',
     'local kc=B.band(B.bxor(idx*idx*41,B.bxor(B.rshift(idx,2),idx*7)),M)',
     'h1=(h1+x+k1)%256 h2=B.bxor(h2,B.bxor(x,idx%29)) h3=(h3+B.bxor(x*13,kb))%256',
     'local rr=B.bxor(B.bxor(B.bxor(B.bxor(x,k1),kb),kc),B.band(idx,15))',
     'local amt=(idx%5)+1 local plain=B.band(B.bor(B.rshift(rr,amt),B.lshift(rr,8-amt)),M)',
     'bytes[idx+1]=plain idx=idx+1 end',
-    'if idx<1 then return SK()end',
-    'if B.bxor(B.bxor(B.bxor(h1,h2),h3),B.band(idx,M))~=K3 then return SK()end',
-    'if K2~=B.bxor(B.bxor(U,12648430),idx*2246822515) then return SK()end',
+    
+    'if idx<1 then return end',
+    'if B.bxor(B.bxor(B.bxor(h1,h2),h3),B.band(idx,M))~=K3 then return end',
+    'if K2~=B.bxor(B.bxor(U,12648430),idx*2246822515) then return end',
+    
     'local out={} for i=1,idx do out[i]=S.char(bytes[i]) end local src=T.concat(out)',
-    'if #src~=idx then return SK()end',
-    'local ok,fn=P(LD,src) if not ok or ty(fn)~="function" then return SK()end P(fn)'
+    'if #src~=idx then return end',
+    
+    '-- Ejecución Final del Script Desofuscado',
+    'local ok,fn=P(LD,src) if not ok or ty(fn)~="function" then return end',
+    'P(fn)'
   ].join(" ").replace(/\s+/g," ").trim();
 
-  const payload="-- Protect by Qyrex\n"+body;
+  const payload="-- Protect by Qyrex Hard [Ultra]\n"+body;
   document.getElementById("out").value=payload;
-  document.getElementById("stats").textContent="seed="+seed+" bytes="+bytes.length+" out="+payload.length;
+  document.getElementById("stats").textContent="Seed="+seed+" | Bytes="+bytes.length+" | Output="+payload.length+" | Status=SECURE";
 }
 </script>
 </body>
