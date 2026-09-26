@@ -1,1 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qyrex Hard - Universal Executor</title>
+<style>
+body{font-family:Consolas,monospace;background:#09090b;color:#ececee;padding:1.5rem}
+textarea{width:100%;height:210px;background:#0c0c0e;border:1px solid #2a2a30;color:#3dba7a;padding:.9rem;border-radius:10px;margin:.4rem 0 1rem;resize:vertical}
+button{width:100%;padding:.9rem;border:0;border-radius:10px;background:#3dba7a;color:#05210f;font-weight:700;cursor:pointer;transition:0.2s}
+button:hover{background:#2e9a65}
+label{font-size:.75rem;color:#8c8c94;text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:0.2rem}
+.stats{font-size:.75rem;color:#8c8c94;margin-top:.6rem;font-weight:bold}
+</style>
+</head>
+<body>
+<label>Entrada Luau (Script a Ofuscar)</label>
+<textarea id="in">print("Script original de prueba")</textarea>
+<button onclick="go()">Proteger (Universal Anti-Tamper)</button>
+<label>Salida (Copia esto)</label>
+<textarea id="out" readonly></textarea>
+<div class="stats" id="stats"></div>
 
+<script>
+const CS="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%()*+,-./:;<=>?@^_{}~",CL=CS.length;
+const GOLDEN=2654435769,C0FFEE=12648430,MURMUR=2246822515,DEAD=3735928559;
+const u32=n=>n>>>0;
+const xs=s=>{s=u32(s);s=u32(s^u32(s<<13));s=u32(s^(s>>>17));s=u32(s^u32(s<<5));return s};
+const rotl8=(v,n)=>{v&=255;n%=8;return((v<<n)|(v>>>(8-n)))&255};
+
+function go(){
+const src=document.getElementById("in").value;
+if(!src.trim())return alert("¡Pega un script primero!");
+
+const bytes=Array.from(new TextEncoder().encode(src));
+let seed=u32(Date.now()^(Math.random()*0xFFFFFFFF)^((performance.now()*1000)|0))||1;
+
+let st=seed,h1=165,h2=60,h3=126,enc="";
+for(let i=0;i<bytes.length;i++){
+st=xs(st);
+const k1=st&255,kb=u32(seed+i*GOLDEN)&255,kc=((i*41)^(i>>>2)^(i*7))&255;
+const x=rotl8(bytes[i],(i%5)+1)^k1^kb^kc^(i&15);
+h1=(h1+x+k1)%256;h2=(h2^x^(i%29))&255;h3=(h3+((x*13)^kb))%256;
+enc+=CS[x%CL]+CS[Math.floor(x/CL)%CL];
+}
+const k3=(h1^h2^h3^(bytes.length&255))&255;
+const k2=u32((seed^C0FFEE)^u32(bytes.length*MURMUR));
+let extra=0;for(let i=0;i<enc.length;i++)extra=(extra+enc.charCodeAt(i)*(i+1))%10007;
+
+const csz=52+((seed>>>8)%31),parts=[];
+for(let i=0;i<enc.length;i+=csz)parts.push(enc.slice(i,i+csz));
+const n=parts.length,order=Array.from({length:n},(_,i)=>i);
+let sst=u32(seed^DEAD);
+for(let i=n-1;i>0;i--){sst=xs(sst);const j=sst%(i+1);[order[i],order[j]]=[order[j],order[i]]}
+const lit=order.map(i=>'"'+parts[i]+'"').join(",");
+
+const body=[
+'local S,B,T,P,LD,ty=string,bit32,table,pcall,loadstring or load,type',
+'local G=type(_G)=="table"and _G or {}',
+'if ty(B)~="table"or ty(P)~="function"or ty(LD)~="function"then return end',
+'if B and B.bxor and B.bxor(90,65)~=27 or B and B.lshift and B.lshift(1,8)~=256 then return end',
+'local CS="'+CS+'" local CL='+CL+' local Q={'+lit+'}',
+'local U='+u32(seed)+' local K2='+k2+' local K3='+k3+' local K4='+extra+' local M=255',
+'if #CS~=CL then return end',
+'local function R(s)s=B.bxor(s,B.lshift(s,13))s=B.bxor(s,B.rshift(s,17))s=B.bxor(s,B.lshift(s,
