@@ -41,7 +41,6 @@ local x = 123</textarea>
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?/~";
 const CL = ALPHABET.length;
 
-// Generador de números pseudo-aleatorios (LCG mejorado)
 const lcg = (seed) => {
     let s = seed >>> 0;
     return () => {
@@ -68,15 +67,14 @@ function obfuscate() {
     const seed = Math.floor(Math.random() * 0xFFFFFFFF);
     const rng = lcg(seed);
 
-    // 1. Encriptación XOR con clave derivada del seed
+    // 1. Encriptación XOR
     const bytes = new TextEncoder().encode(src);
     let encrypted = new Uint8Array(bytes.length);
     let key = seed;
 
     for (let i = 0; i < bytes.length; i++) {
         key = (key * 2654435761 + 12648430) >>> 0;
-        const byteVal = bytes[i] ^ ((key >>> 16) & 0xFF);
-        encrypted[i] = byteVal;
+        encrypted[i] = bytes[i] ^ ((key >>> 16) & 0xFF);
     }
 
     // 2. Codificación Base64 Custom
@@ -88,9 +86,9 @@ function obfuscate() {
 
         const n = (b1 << 16) | (b2 << 8) | b3;
         encoded += ALPHABET.charAt((n >>> 18) & 63);
-        encoded += (i + 1 < encrypted.length) ? ALPHABET.charAt((n >>> 12) & 63) : "";
-        encoded += (i + 2 < encrypted.length) ? ALPHABET.charAt((n >>> 6) & 63) : "";
-        encoded += (i + 3 < encrypted.length) ? ALPHABET.charAt(n & 63) : "";
+        if (i + 1 < encrypted.length) encoded += ALPHABET.charAt((n >>> 12) & 63);
+        if (i + 2 < encrypted.length) encoded += ALPHABET.charAt((n >>> 6) & 63);
+        if (i + 3 < encrypted.length) encoded += ALPHABET.charAt(n & 63);
     }
 
     // 3. Variables aleatorias
@@ -100,7 +98,6 @@ function obfuscate() {
     const v3 = vars[Math.floor(Math.random() * vars.length)];
     const v4 = vars[Math.floor(Math.random() * vars.length)];
 
-    // Bloque de "Basura" (Dead Code)
     const deadCode = `
         if true then
             local _d_${rng()} = 0
@@ -108,35 +105,19 @@ function obfuscate() {
         end
     `;
 
-    // Tabla de mapeo inversa
     let decodeTable = "{";
     for (let i = 0; i < ALPHABET.length; i++) {
         decodeTable += `[${ALPHABET.charCodeAt(i)}] = ${i},`;
     }
     decodeTable += "}";
 
-    // Script Lua completo y funcional
+    // Script Luau VÁLIDO (sin error de sintaxis)
     const luaScript = `-- This file was protected using Qyrex Obfuscator v10.0 [https://qyrex.hopto.org]
-return setmetatable({
-    [1]="print", [2]="function", [3]="load", [4]=pcall, [5]=debug.getinfo, [6]=getfenv, [7]=string, [8]=table, [9]=math, [10]=bit32, [11]=math.random, [12]=os.time, [13]=collectgarbage, [14]=type, [15]=next, [16]=pairs, [17]=ipairs, [18]=tonumber, [19]=tostring, [20]=rawget, [21]=rawset, [22]=setmetatable, [23]=getmetatable, [24]=loadstring, [25]=load, [26]=error, [27]=assert, [28]=require, [29]=coroutine, [30]=module, [31]=dofile, [32]=dofile, [33]=io, [34]=os, [35]=debug, [36]=utf8, [37]=pairs, [38]=next, [39]=ipairs, [40]=tonumber, [41]=tostring, [42]=rawget, [43]=rawset, [44]=setmetatable, [45]=getmetatable
-}, {
-    __index = function(t, k) return t[k] end
-})
 do
-local ${v1}, ${v2}, ${v3}, ${v4} = string, bit32, loadstring or load, table
+local ${v1}, ${v2}, ${v3}, ${v4} = string, bit32, load, table
 local _K = ${seed}
 local _S = "${encoded}"
-local _C = "${ALPHABET}"
 local _T = ${decodeTable}
-
--- Anti-Debugging Check (Multi-layer)
-if ${v1}.gsub then
-    local _t = debug.getinfo(1, "n")
-    if _t and _t.name == "main" then
-        local _env = getfenv(1)
-        if _env then _env.debug = nil end
-    end
-end
 
 local function _decodeBase64(_str)
     local _res = {}
@@ -144,15 +125,15 @@ local function _decodeBase64(_str)
     local _i = 1
     while _i <= _len do
         local _c1 = _T[${v1}.byte(_str, _i)] or 0
-        local _c2 = (_i+1 <= _len) and (_T[${v1}.byte(_str, _i+1)] or 0) or 0
-        local _c3 = (_i+2 <= _len) and (_T[${v1}.byte(_str, _i+2)] or 0) or 0
-        local _c4 = (_i+3 <= _len) and (_T[${v1}.byte(_str, _i+3)] or 0) or 0
+        local _c2 = (_i + 1 <= _len) and (_T[${v1}.byte(_str, _i + 1)] or 0) or 0
+        local _c3 = (_i + 2 <= _len) and (_T[${v1}.byte(_str, _i + 2)] or 0) or 0
+        local _c4 = (_i + 3 <= _len) and (_T[${v1}.byte(_str, _i + 3)] or 0) or 0
 
-        local _n = (_c1 * 262144) + (_c2 * 4096) + (_c3 * 64) + _c4
+        local _n = _c1 * 262144 + _c2 * 4096 + _c3 * 64 + _c4
 
-        ${v4}.insert(_res, ${v1}.char((_n / 65536) % 256))
+        ${v4}.insert(_res, ${v1}.char(math.floor(_n / 65536) % 256))
         if _i + 1 < _len then
-            ${v4}.insert(_res, ${v1}.char((_n / 256) % 256))
+            ${v4}.insert(_res, ${v1}.char(math.floor(_n / 256) % 256))
         end
         if _i + 2 < _len then
             ${v4}.insert(_res, ${v1}.char(_n % 256))
@@ -165,8 +146,7 @@ end
 local function _decrypt(_data, _key)
     local _res = {}
     local _k = _key
-    local _len = #_data
-    for _i = 1, _len do
+    for _i = 1, #_data do
         _k = (_k * 2654435761 + 12648430) % 4294967296
         local _b = math.floor(_k / 65536) % 256
         local _char = ${v1}.byte(_data, _i)
@@ -177,18 +157,14 @@ end
 
 ${deadCode}
 
--- Main Execution Logic
-local _exec = function()
-    local _raw = _decodeBase64(_S)
-    local _decrypted = _decrypt(_raw, _K)
-    local _fn, _err = ${v3}(_decrypted)
-    if not _fn then
-        error("Qyrex: " .. tostring(_err))
-    end
-    return _fn()
+local _raw = _decodeBase64(_S)
+local _decrypted = _decrypt(_raw, _K)
+local _fn, _err = ${v3}(_decrypted)
+if _fn then
+    _fn()
+else
+    error("Qyrex: " .. tostring(_err))
 end
-
-return _exec()
 end
 `;
 
