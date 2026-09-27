@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f8fafc">
+<title>QyrexDeobf</title>
+<style>
+:root{
+  --bg:#f7f9fc;
+  --panel:#fff;
+  --panel-soft:#f3f6fa;
+  --panel-hover:#eaf0f7;
+  --border:#dce3eb;
+  --border-strong:#cbd5e1;
+  --text:#0f172a;
+  --muted:#64748b;
+  --faint:#94a3b8;
+  --accent:#3b82f6;
+  --accent-strong:#2563eb;
+  --accent-soft:#eaf2ff;
+  --success:#10b981;
+  --warning:#f59e0b;
+  --danger:#ef4444;
+  --mono:"JetBrains Mono","SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  --sans:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;width:100%}
+body{
+  font-family:var(--sans);
+  color:var(--text);
+  background:var(--bg);
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+button,input,textarea{font:inherit}
+button{border:0}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid rgba(59,130,246,.45);outline-offset:1px}
+.app{
+  height:100%;
+  display:flex;
+  flex-direction:column;
+}
+.topbar{
+  height:52px;
+  flex:0 0 52px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:0 14px;
+  background:rgba(255,255,255,.96);
+  border-bottom:1px solid var(--border);
+  box-shadow:0 1px 10px rgba(15,23,42,.03);
+  z-index:5;
+}
+.brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:210px;
+  margin-right:4px;
+}
+.brand-mark{
+  width:30px;height:30px;border-radius:8px;
+  display:grid;place-items:center;
+  background:linear-gradient(145deg,#10233e,#243a5f);
+  color:#fff;font-size:13px;font-weight:800;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.15);
+}
+.brand-name{font-weight:700;font-size:15px;letter-spacing:-.01em}
+.toolbar-group{display:flex;align-items:center;gap:6px}
+.tool-btn{
+  height:34px;
+  padding:0 11px;
+  border-radius:8px;
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  color:#334155;
+  background:transparent;
+  border:1px solid transparent;
+  cursor:pointer;
+  transition:.14s ease;
+  font-size:12px;
+  font-weight:600;
+  white-space:nowrap;
+}
+.tool-btn:hover{background:var(--panel-soft);border-color:var(--border)}
+.tool-btn.soft{background:#eef4fb;border-color:#d9e4f0}
+.tool-btn.primary{
+  color:#fff;
+  background:var(--accent);
+  border-color:var(--accent);
+  box-shadow:0 2px 7px rgba(59,130,246,.18);
+}
+.tool-btn.primary:hover{background:var(--accent-strong);border-color:var(--accent-strong)}
+.tool-btn.stop{
+  color:#a13d39;
+  background:#fff7f7;
+  border-color:#f2d3d2;
+}
+.tool-btn.stop:hover{background:#fff0ef}
+.tool-btn:disabled{opacity:.55;cursor:not-allowed}
+.icon{width:14px;height:14px;display:inline-grid;place-items:center;flex:none}
+.top-spacer{flex:1}
+.status-wrap{
+  display:flex;align-items:center;gap:13px;
+  color:var(--muted);font-size:11px;
+  white-space:nowrap;
+}
+.status{
+  display:inline-flex;align-items:center;gap:7px;
+}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--faint);box-shadow:0 0 0 2px rgba(148,163,184,.10)}
+.status-dot.running{background:var(--accent);box-shadow:0 0 0 2px rgba(59,130,246,.12)}
+.status-dot.success{background:var(--success);box-shadow:0 0 0 2px rgba(16,185,129,.12)}
+.status-dot.warn{background:var(--warning);box-shadow:0 0 0 2px rgba(245,158,11,.12)}
+.status-dot.error{background:var(--danger);box-shadow:0 0 0 2px rgba(239,68,68,.12)}
+.runtime-pill{
+  display:inline-flex;align-items:center;gap:6px;
+  height:28px;padding:0 9px;border:1px solid var(--border);
+  background:#fff;border-radius:7px;color:#475569;font-weight:600;
+}
+.main{
+  min-height:0;
+  flex:1;
+  display:grid;
+  grid-template-columns:205px minmax(0,1fr) 390px;
+}
+.sidebar{
+  min-width:0;
+  display:flex;flex-direction:column;
+  background:#fff;
+  border-right:1px solid var(--border);
+  overflow:auto;
+  padding:10px 8px;
+}
+.side-title{
+  padding:8px 10px 7px;
+  color:#8a98aa;
+  font-size:10px;
+  letter-spacing:.08em;
+  font-weight:800;
+}
+.side-item{
+  height:34px;
+  padding:0 9px;
+  margin:1px 0;
+  display:flex;align-items:center;gap:9px;
+  border-radius:7px;
+  color:#4b5c70;
+  font-size:12px;
+  cursor:pointer;
+  transition:.12s ease;
+}
+.side-item:hover{background:var(--panel-soft);color:#24364c}
+.side-item.active{background:#eaf2ff;color:#2763bd}
+.side-item .count{
+  margin-left:auto;
+  min-width:19px;height:18px;padding:0 6px;
+  display:inline-grid;place-items:center;
+  border-radius:9px;
+  background:#e8eef6;
+  color:#75869b;
+  font-size:10px;font-weight:800;
+}
+.side-item.active .count{background:#d6e6ff;color:#2a69c5}
+.side-divider{height:1px;background:var(--border);margin:9px 2px}
+.side-bottom{
+  margin-top:auto;
+  padding:12px 10px 5px;
+  color:#91a0b1;
+  font-size:10px;
+  line-height:1.5;
+}
+.side-bottom strong{color:#547092}
+.editor-panel{
+  min-width:0;min-height:0;
+  display:flex;flex-direction:column;
+  background:#fff;
+}
+.editor-toolbar{
+  flex:0 0 40px;height:40px;
+  display:flex;align-items:center;
+  background:var(--panel-soft);
+  border-bottom:1px solid var(--border);
+  padding:0 10px;
+}
+.file-tab{
+  height:30px;padding:0 12px;
+  display:flex;align-items:center;gap:8px;
+  border:1px solid var(--border);
+  border-bottom-color:#fff;
+  background:#fff;
+  border-radius:7px 7px 0 0;
+  color:#516175;font-size:11px;font-weight:600;
+}
+.file-tab .close{color:#a3afbd;font-size:13px;cursor:pointer}
+.editor-diagnostic{
+  min-height:31px;
+  display:flex;align-items:center;gap:10px;
+  padding:0 13px;
+  background:#fffdf4;
+  border-bottom:1px solid #eee6c7;
+  color:#7b6b42;
+  font-size:11px;
+}
+.diagnostic-label{
+  color:#927b36;font-weight:800;font-size:9px;letter-spacing:.08em;text-transform:uppercase;
+}
+.diagnostic-badge{
+  padding:3px 7px;border-radius:5px;background:#f6efcf;
+  color:#846c2b;font-size:10px;font-weight:700;
+}
+.editor-shell{
+  flex:1;min-height:0;
+  position:relative;
+  display:grid;
+  grid-template-columns:46px minmax(0,1fr);
+  overflow:hidden;
+}
+.line-numbers{
+  min-width:0;
+  overflow:hidden;
+  padding:12px 9px 12px 0;
+  background:#fff;
+  color:#b3becb;
+  text-align:right;
+  font:11px/1.58 var(--mono);
+  user-select:none;
+  white-space:pre;
+}
+.code{
+  width:100%;height:100%;
+  resize:none;
+  border:0;outline:none;
+  padding:12px 16px 18px 2px;
+  background:#fff;
+  color:#111827;
+  font:11px/1.58 var(--mono);
+  white-space:pre;
+  tab-size:2;
+  overflow:auto;
+  caret-color:#2563eb;
+}
+.code::selection{background:#dcecff}
+.editor-footer{
+  flex:0 0 28px;height:28px;
+  display:flex;align-items:center;gap:14px;
+  padding:0 11px;
+  color:#8a98aa;
+  background:var(--panel-soft);
+  border-top:1px solid var(--border);
+  font-size:10px;
+}
+.footer-right{margin-left:auto;display:flex;gap:12px}
+.right-panel{
+  min-width:0;min-height:0;
+  display:flex;flex-direction:column;
+  background:#fff;
+  border-left:1px solid var(--border);
+}
+.right-header{
+  flex:0 0 40px;height:40px;
+  display:flex;align-items:center;
+  padding:0 10px;
+  gap:5px;
+  background:var(--panel-soft);
+  border-bottom:1px solid var(--border);
+}
+.right-tab{
+  height:29px;padding:0 10px;
+  display:inline-flex;align-items:center;
+  border-radius:7px;
+  color:#7a8899;font-size:11px;font-weight:700;
+  cursor:pointer;
+}
+.right-tab.active{color:#334155;background:#fff;border:1px solid var(--border)}
+.right-actions{margin-left:auto;display:flex;align-items:center;gap:4px}
+.mini-btn{
+  height:28px;padding:0 8px;border-radius:6px;
+  background:#fff;border:1px solid transparent;
+  color:#748297;font-size:10px;font-weight:700;cursor:pointer;
+}
+.mini-btn:hover{border-color:var(--border);background:#fbfdff}
+.right-content{
+  flex:1;min-height:0;overflow:auto;
+  padding:13px 14px 16px;
+  background:#fff;
+  font-family:var(--mono);
+  font-size:11px;
+  line-height:1.55;
+}
+.banner{
+  padding:11px 12px;
+  border:1px solid #dfe8f2;
+  border-radius:8px;
+  background:#f7fafe;
+  color:#718095;
+  font-family:var(--sans);
+  font-size:10px;
+  line-height:1.45;
+  margin-bottom:11px;
+}
+.banner strong{color:#4e6785}
+.log-line{display:flex;gap:7px;margin:2px 0;word-break:break-word}
+.log-time{width:48px;flex:none;color:#a1adba;text-align:right}
+.log-type{width:42px;flex:none;font-weight:800}
+.log-type.sys{color:#5b83b7}
+.log-type.out{color:#24936d}
+.log-type.warn{color:#aa8024}
+.log-type.err{color:#c55757}
+.log-msg{color:#4e5f73}
+.result{
+  border:1px solid var(--border);
+  border-radius:8px;
+  overflow:hidden;
+}
+.result-head{
+  height:34px;padding:0 10px;
+  display:flex;align-items:center;gap:7px;
+  background:var(--panel-soft);border-bottom:1px solid var(--border);
+  color:#5f7188;font-family:var(--sans);font-size:10px;font-weight:800;
+}
+.result-code{
+  margin:0;
+  padding:12px;
+  max-height:calc(100vh - 165px);
+  overflow:auto;
+  background:#fff;color:#0f172a;
+  font:10.5px/1.55 var(--mono);
+  white-space:pre;
+}
+.metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:11px}
+.metric{border:1px solid var(--border);border-radius:7px;padding:9px;background:#fff}
+.metric small{display:block;color:#98a5b4;font:700 9px var(--sans);text-transform:uppercase;letter-spacing:.06em}
+.metric b{display:block;margin-top:5px;color:#334155;font:700 14px var(--mono)}
+.env-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.env-card{border:1px solid var(--border);border-radius:8px;padding:10px;background:#fff}
+.env-card strong{display:block;color:#5e7087;font-size:9px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.env-value{font:600 10px var(--mono);color:#334155;word-break:break-all}
+.empty{
+  padding:34px 18px;text-align:center;color:#95a2b1;
+  font-family:var(--sans);font-size:11px;
+}
+.drop-overlay{
+  position:fixed;inset:0;display:none;place-items:center;
+  background:rgba(248,250,252,.82);
+  backdrop-filter:blur(5px);
+  z-index:20;
+}
+.drop-overlay.show{display:grid}
+.drop-box{
+  width:min(430px,calc(100vw - 36px));
+  border:2px dashed #91b7e8;border-radius:14px;
+  padding:28px;text-align:center;background:#fff;
+  box-shadow:0 18px 50px rgba(15,23,42,.10);
+}
+.drop-box strong{display:block;font-size:17px;margin-bottom:7px}
+.drop-box span{color:#718096;font-size:11px}
+.toast{
+  position:fixed;right:18px;bottom:18px;z-index:30;
+  display:none;
+  min-width:230px;max-width:370px;
+  padding:11px 13px;
+  border:1px solid var(--border);
+  border-radius:9px;
+  background:#fff;
+  box-shadow:0 12px 35px rgba(15,23,42,.12);
+  color:#526276;font-size:11px;
+}
+.toast.show{display:block}
+.toast strong{color:#2d435e}
+@media (max-width:1000px){
+  .main{grid-template-columns:180px minmax(0,1fr) 320px}
+  .brand{min-width:180px}
+  .tool-btn.hide-sm .label{display:none}
+}
+@media (max-width:760px){
+  .main{grid-template-columns:1fr}
+  .sidebar,.right-panel{display:none}
+  .brand{min-width:0}
+  .topbar{padding:0 9px}
+}
+
+.qyrex-codebox{margin:12px 0 0;border:1px solid var(--border);border-radius:10px;background:#0f172a;overflow:auto;max-height:58vh}
+.qyrex-codebox pre{margin:0;padding:14px;font:11px/1.55 var(--mono);color:#dbeafe;white-space:pre;tab-size:2}
+.call-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.call-card{border:1px solid var(--border);border-radius:8px;padding:10px;background:#fff}
+.call-card strong{display:block;font-size:10px;color:#60718a;text-transform:uppercase;letter-spacing:.06em}
+.call-card b{display:block;margin-top:4px;font-size:17px;color:#27364a}
+.call-line{padding:8px 0;border-bottom:1px solid #edf1f5;display:grid;grid-template-columns:54px 82px 1fr;gap:8px;align-items:start}
+.call-line:last-child{border-bottom:0}
+.call-line .ln{font:600 10px var(--mono);color:#8290a3}
+.call-line .kind{font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#47627f}
+.call-line .body{font-size:11px;color:#25384e;min-width:0}
+.call-line .source{display:block;margin-top:3px;color:#8290a3;font:10px var(--mono);white-space:pre-wrap;word-break:break-word}
+.dumper-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.dumper-card{border:1px solid var(--border);border-radius:8px;padding:9px;background:#fff}
+.dumper-card .name{font-weight:800;color:#314158;font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+.dumper-card .value{margin-top:4px;font-size:12px;color:#64748b}
+@media(max-width:900px){.call-summary,.dumper-grid{grid-template-columns:1fr 1fr}.call-line{grid-template-columns:44px 72px 1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">Q</div>
+      <div class="brand-name">QyrexDeobf</div>
+    </div>
+
+    <div class="toolbar-group">
+      <button class="tool-btn soft hide-sm" id="btnNewTab" title="Nueva pestaña">
+        <span class="icon">↗</span><span class="label">New tab</span>
+      </button>
+      <button class="tool-btn" id="btnNew"><span class="icon">＋</span><span class="label">New</span></button>
+      <button class="tool-btn" id="btnOpen"><span class="icon">□</span><span class="label">Open</span></button>
+      <button class="tool-btn hide-sm" id="btnSave"><span class="icon">⇩</span><span class="label">Save</span></button>
+      <button class="tool-btn soft hide-sm"><span class="icon">▣</span><span class="label">Editor</span></button>
+      <input id="fileInput" type="file" accept=".lua,.luau,.txt" hidden>
+
+      <button class="tool-btn primary" id="btnRun"><span class="icon">▶</span><span class="label">Run</span></button>
+      <button class="tool-btn stop" id="btnStop" disabled><span class="icon">■</span><span class="label">Stop</span></button>
+      <button class="tool-btn" id="btnDeobf"><span class="icon">◇</span><span class="label">Deobfuscate</span></button>
+    </div>
+
+    <div class="top-spacer"></div>
+
+    <div class="status-wrap">
+      <div class="runtime-pill">Qyrex Engine · Multi-pass</div>
+      <div class="status"><span class="status-dot" id="statusDot"></span><span id="runStatus">Idle</span></div>
+      <span id="elapsed">00:00.0</span>
+    </div>
+  </header>
+
+  <div class="main">
+    <aside class="sidebar">
+      <div class="side-title">INSPECT</div>
+
+      <div class="side-item active" data-view="output">
+        <span class="icon">⊙</span> Output <span class="count" id="outCount">0</span>
+      </div>
+      <div class="side-item" data-view="network">
+        <span class="icon">◎</span> Network <span class="count" id="networkCount">0</span>
+      </div>
+      <div class="side-item" data-view="behavior">
+        <span class="icon">⌁</span> Behavior <span class="count" id="behaviorCount">0</span>
+      </div>
+      <div class="side-item" data-view="vm">
+        <span class="icon">⌘</span> VM trace <span class="count" id="vmCount">0</span>
+      </div>
+      <div class="side-item" data-view="deobf">
+        <span class="icon">◇</span> Deobfuscate
+      </div>
+      <div class="side-item" data-view="environment">
+        <span class="icon">◈</span> Environment
+      </div>
+      <div class="side-item" data-view="report">
+        <span class="icon">▤</span> Run report
+      </div>
+
+      <div class="side-title" style="margin-top:8px">TOOLS</div>
+      <div class="side-item" id="sideCopy"><span class="icon">⎘</span> Copy cleaned</div>
+      <div class="side-item" id="sideDownload"><span class="icon">⇩</span> Download .lua</div>
+      <div class="side-item" id="sideClear"><span class="icon">⌫</span> Clear output</div>
+
+      <div class="side-bottom">
+        <div>Active script <strong id="activeFile">1 / 10</strong></div>
+        <div style="margin-top:3px">Runtime <strong>Qyrex Multi-pass</strong></div>
+        <div style="margin-top:3px">Local source analysis + server devirtualization</div>
+      </div>
+    </aside>
+
+    <main class="editor-panel">
+      <div class="editor-toolbar">
+        <div class="file-tab">
+          <span id="tabName">untitled-obfuscated.lua</span>
+          <span class="close" id="clearFile" title="Limpiar archivo">×</span>
+        </div>
+      </div>
+
+      <div class="editor-diagnostic">
+        <span class="diagnostic-label">Preflight</span>
+        <span class="diagnostic-badge" id="detectBadge">Awaiting source</span>
+        <span id="diagnosticText">Carga un script Luau para iniciar el análisis.</span>
+      </div>
+
+      <div class="editor-shell">
+        <pre class="line-numbers" id="lineNumbers">1</pre>
+        <textarea id="code" class="code" spellcheck="false" wrap="off" placeholder="Pega aquí el script Luraph / VM / Luau..."></textarea>
+      </div>
+
+      <div class="editor-footer">
+        <span id="lineInfo">0 lines</span>
+        <span id="sizeInfo">0 KB</span>
+        <span id="languageInfo">Luau</span>
+        <div class="footer-right">
+          <span id="cursorInfo">Ln 1, Col 1</span>
+          <span>UTF-8</span>
+        </div>
+      </div>
+    </main>
+
+    <section class="right-panel">
+      <div class="right-header">
+        <div class="right-tab active" data-right="output">Output</div>
+        <div class="right-tab" data-right="calls">Calls + output</div>
+        <div class="right-tab" data-right="environment">Environment</div>
+        <div class="right-actions">
+          <button class="mini-btn" id="btnFollow">⌄ Follow</button>
+          <button class="mini-btn" id="btnCopy">⎘ Copy</button>
+          <button class="mini-btn" id="btnClear">⌫ Clear</button>
+        </div>
+      </div>
+      <div class="right-content" id="rightContent"></div>
+    </section>
+  </div>
+</div>
+
+<div class="drop-overlay" id="dropOverlay">
+  <div class="drop-box">
+    <strong>Suelta tu archivo Luau aquí</strong>
+    <span>QyrexDeobf detectará Luraph, VM y patrones de otros obfuscadores y preparará el análisis.</span>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+
+  const state = {
+    fileName: "untitled-obfuscated.lua",
+    code: "",
+    cleaned: "",
+    logs: [],
+    currentRight: "output",
+    currentSide: "output",
+    controller: null,
+    running: false,
+    startedAt: 0,
+    timer: null,
+    analysis: null,
+    calls: [],
+    report: null,
+    engine: "static"
+  };
+
+  function nowStamp() {
+    return ((performance.now() - state.startedAt) / 1000).toFixed(3);
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function toast(title, message) {
+    const box = $("toast");
+    box.innerHTML = `<strong>${escapeHtml(title)}</strong><div style="margin-top:4px">${escapeHtml(message)}</div>`;
+    box.classList.add("show");
+    clearTimeout(box._timer);
+    box._timer = setTimeout(() => box.classList.remove("show"), 3200);
+  }
+
+  function setStatus(label, type = "") {
+    $("runStatus").textContent = label;
+    const dot = $("statusDot");
+    dot.className = "status-dot" + (type ? " " + type : "");
+  }
+
+  function startClock() {
+    state.startedAt = performance.now();
+    clearInterval(state.timer);
+    state.timer = setInterval(() => {
+      const elapsed = (performance.now() - state.startedAt) / 1000;
+      $("elapsed").textContent = `00:${String(Math.floor(elapsed)).padStart(2, "0")}.${Math.floor((elapsed % 1) * 10)}`;
+    }, 100);
+  }
+
+  function stopClock() {
+    clearInterval(state.timer);
+    state.timer = null;
+  }
+
+  function log(message, type = "sys") {
+    state.logs.push({ message: String(message), type, time: nowStamp() });
+    $("outCount").textContent = String(state.logs.length);
+    renderRight();
+  }
+
+  function lineCount(code) {
+    return code ? code.split("\n").length : 0;
+  }
+
+  function updateEditorInfo() {
+    const code = state.code;
+    $("lineInfo").textContent = `${lineCount(code)} lines`;
+    $("sizeInfo").textContent = `${(new TextEncoder().encode(code).length / 1024).toFixed(1)} KB`;
+
+    const lines = Math.max(1, lineCount(code));
+    let text = "";
+    for (let i = 1; i <= lines; i++) text += i + "\n";
+    $("lineNumbers").textContent = text;
+
+    const cursor = $("code");
+    const before = code.slice(0, cursor.selectionStart || 0);
+    const line = before.split("\n").length;
+    const lastBreak = before.lastIndexOf("\n");
+    const col = (cursor.selectionStart || 0) - lastBreak;
+    $("cursorInfo").textContent = `Ln ${line}, Col ${col}`;
+  }
+
+  function syncScroll() {
+    $("lineNumbers").scrollTop = $("code").scrollTop;
+  }
+
+  function setCode(value) {
+    state.code = String(value ?? "");
+    $("code").value = state.code;
+    updateEditorInfo();
+    updatePreflight();
+  }
+
+  function updatePreflight() {
+    const a = analyzeLuraph(state.code);
+    state.analysis = a;
+    $("detectBadge").textContent = a.detected ? `Luraph ${a.version}` : "Not detected";
+    $("detectBadge").style.background = a.detected ? "#eaf2ff" : "#f2f5f8";
+    $("detectBadge").style.color = a.detected ? "#2763bd" : "#708197";
+    $("diagnosticText").textContent = a.detected
+      ? `${a.bytes.toLocaleString()} bytes · ${a.functions.toLocaleString()} functions · VM markers ${a.vmMarkers}`
+      : "Carga un script Luau para iniciar el análisis.";
+  }
+
+  function analyzeLuraph(src) {
+    const hasHeader = /This file was protected using Luraph Obfuscator v([\d.]+)/i.exec(src);
+    const hasTable = /return\s+setmetatable\s*\(\s*\{/i.test(src);
+    const hasYA = /\.YA\s*\(\s*\)/i.test(src);
+    const hasBuffer = /\bbuffer\.(readu8|writeu32|fromstring|tostring|len)\b/i.test(src);
+    const hasDispatch = /while\s+true\s+do[\s\S]{0,9000}if\s+[A-Za-z_]\w*\s*<=\s*\d+/i.test(src);
+    const detected = Boolean(hasHeader || (hasTable && hasYA && hasBuffer));
+    const version = hasHeader ? hasHeader[1] : (detected ? "15.x" : "—");
+    const functions = (src.match(/\bfunction\b/g) || []).length;
+    const strings = [...src.matchAll(/"(?:\\.|[^"\\])*"/gs)].map(m => m[0].length).sort((a,b)=>b-a);
+    const vmMarkers = [
+      hasTable && "setmetatable",
+      hasYA && "YA",
+      hasBuffer && "buffer",
+      hasDispatch && "dispatcher"
+    ].filter(Boolean).length;
+
+    const globals = [];
+    for (const name of ["game","getgenv","workspace","loadstring","buffer","bit32","Instance"]) {
+      if (new RegExp("\\b" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b").test(src)) globals.push(name);
+    }
+
+    return {
+      detected,
+      version,
+      bytes: new TextEncoder().encode(src).length,
+      lines: lineCount(src),
+      functions,
+      stringCount: strings.length,
+      largestStrings: strings.slice(0, 3),
+      vmMarkers,
+      globals,
+      shape: hasTable && hasYA ? "VM wrapper" : "Unknown"
+    };
+  }
+
+  function staticFallback(src, analysis) {
+    let cleaned = src;
+    const version = analysis?.version || "15.x";
+    cleaned = cleaned
+      .replace(/--\s*This file was protected using Luraph Obfuscator v[\d.]+\s*\[https:\/\/lura\.ph\/\]\s*/i,
+        `-- QyrexDeobf static analysis · Luraph v${version}\n`)
+      .replace(/\r\n/g, "\n")
+      .replace(/;\s*/g, ";\n");
+
+    return [
+      `-- QyrexDeobf`,
+      `-- Luraph v${version} detected`,
+      `-- Static fallback: structure cleaned, VM not devirtualized in-browser`,
+      `-- Use a configured Qyrex server engine for full source recovery.`,
+      ``,
+      cleaned
+    ].join("\n");
+  }
+
+  function renderLogs() {
+    if (!state.logs.length) {
+      return `<div class="empty">Listo. Abre o pega un script y pulsa <b>Run</b> o <b>Deobfuscate</b>.</div>`;
+    }
+    return state.logs.map((item) => `
+      <div class="log-line">
+        <span class="log-time">+${item.time}</span>
+        <span class="log-type ${item.type}">${item.type.toUpperCase()}</span>
+        <span class="log-msg">${escapeHtml(item.message)}</span>
+      </div>
+    `).join("");
+  }
+
+  function renderAnalysis() {
+    const a = state.analysis || analyzeLuraph(state.code);
+    if (!state.code && !state.cleaned) return `<div class="empty">Sin código para analizar.</div>`;
+    const dumper = a?.dumpers || {};
+    return `
+      <div class="metrics">
+        <div class="metric"><small>Provider</small><b>${escapeHtml(a.provider || (a.detected ? "Luraph" : "Unknown"))}</b></div>
+        <div class="metric"><small>Size</small><b>${Number(a.bytes || 0).toLocaleString()} B</b></div>
+        <div class="metric"><small>Functions</small><b>${Number(a.functions || 0).toLocaleString()}</b></div>
+        <div class="metric"><small>Calls</small><b>${Number(a.calls?.length || 0).toLocaleString()}</b></div>
+      </div>
+      <div class="banner">
+        <strong>Environment / static dump</strong><br>
+        ${escapeHtml(a.filename || state.fileName)} · globals: ${escapeHtml((a.globals || []).join(", ") || "none")} · services: ${escapeHtml((a.services || []).join(", ") || "none")}
+      </div>
+      <div class="dumper-grid">
+        <div class="dumper-card"><div class="name">Strings dumper</div><div class="value">${Number(dumper.strings?.count || 0).toLocaleString()} strings · ${Number(dumper.strings?.decoded?.length || 0).toLocaleString()} decoded candidates</div></div>
+        <div class="dumper-card"><div class="name">Constants dumper</div><div class="value">${Number(dumper.constants?.numberCount || 0).toLocaleString()} numeric constants</div></div>
+        <div class="dumper-card"><div class="name">Calls dumper</div><div class="value">${Number(a.calls?.length || 0).toLocaleString()} call/behavior locations</div></div>
+        <div class="dumper-card"><div class="name">VM dumper</div><div class="value">${Number(a.dumpers?.vm?.markers?.length || 0).toLocaleString()} VM markers detected</div></div>
+      </div>
+      ${state.cleaned ? `<div class="qyrex-codebox"><pre>${escapeHtml(state.cleaned)}</pre></div>` : ""}
+    `;
+  }
+
+  function renderCalls() {
+    const a = state.analysis || {};
+    const calls = Array.isArray(a.calls) ? a.calls : [];
+    const net = calls.filter(c => ["network", "websocket"].includes(c.type)).length;
+    const behavior = calls.filter(c => !["network", "websocket", "api"].includes(c.type)).length;
+    const vm = (a.dumpers?.vm?.markers || []).length;
+    if (calls.length) {
+      state.calls = calls.map(c => ({
+        time: `L${c.line}`,
+        type: c.type,
+        message: `${c.name}: ${c.message}`,
+        source: c.source || ""
+      }));
+    }
+    $("networkCount").textContent = String(net);
+    $("behaviorCount").textContent = String(behavior);
+    $("vmCount").textContent = String(vm);
+    return state.calls.length
+      ? `<div class="call-summary"><div class="call-card"><strong>Network</strong><b>${net}</b></div><div class="call-card"><strong>Behavior</strong><b>${behavior}</b></div><div class="call-card"><strong>VM markers</strong><b>${vm}</b></div></div>` + state.calls.map(c => `
+          <div class="call-line"><span class="ln">${escapeHtml(c.time)}</span><span class="kind">${escapeHtml(c.type)}</span><span class="body"><b>${escapeHtml(c.message)}</b>${c.source ? `<span class="source">${escapeHtml(c.source)}</span>` : ""}</span></div>
+        `).join("")
+      : `<div class="empty">No hay llamadas o comportamientos detectables todavía.</div>`;
+  }
+
+  function renderReport() {
+    const a = state.analysis || {};
+    const r = state.report || {};
+    return `<div class="banner"><strong>Run report</strong><br>Engine: ${escapeHtml(state.engine || "static")}</div>
+      <div class="env-grid">
+        <div class="env-card"><strong>Provider</strong><div class="env-value">${escapeHtml(a.provider || "Unknown")}</div></div>
+        <div class="env-card"><strong>Libraries</strong><div class="env-value">${escapeHtml((a.libraries || []).join("\n") || "—")}</div></div>
+        <div class="env-card"><strong>Services</strong><div class="env-value">${escapeHtml((a.services || []).join("\n") || "—")}</div></div>
+        <div class="env-card"><strong>Globals</strong><div class="env-value">${escapeHtml((a.globals || []).join("\n") || "—")}</div></div>
+      </div>
+      ${r.stdout || r.stderr ? `<div class="qyrex-codebox"><pre>${escapeHtml((r.stdout || "") + (r.stderr ? "\n" + r.stderr : ""))}</pre></div>` : ""}`;
+  }
+
+  function renderRight() {
+    const box = $("rightContent");
+    if (state.currentRight === "output") {
+      box.innerHTML = `<div class="banner"><strong>QyrexDeobf</strong><br>Pipeline: detection → dumpers → deobfuscation → behavior/call analysis. The target source is inspected by the local analyzer; the browser does not create a live Roblox environment.</div><div id="logArea">${renderLogs()}</div>`;
+    } else if (state.currentRight === "calls") {
+      box.innerHTML = renderCalls();
+    } else if (state.currentRight === "report") {
+      box.innerHTML = renderReport();
+    } else {
+      box.innerHTML = renderAnalysis();
+    }
+  }
+
+  function switchRight(view) {
+    state.currentRight = view;
+    document.querySelectorAll(".right-tab").forEach(t => t.classList.toggle("active", t.dataset.right === view));
+    renderRight();
+  }
+
+  function switchSide(view) {
+    state.currentSide = view;
+    document.querySelectorAll(".side-item[data-view]").forEach(i => i.classList.toggle("active", i.dataset.view === view));
+    const mapping = {
+      output: "output",
+      network: "calls",
+      behavior: "calls",
+      vm: "calls",
+      deobf: "environment",
+      environment: "environment",
+      report: "report"
+    };
+    if (mapping[view]) switchRight(mapping[view]);
+  }
+
+  async function deobfuscate() {
+    if (state.running) return;
+    const src = state.code.trim();
+    if (!src) {
+      log("No hay código para procesar.", "err");
+      setStatus("Idle", "");
+      return;
+    }
+
+    state.running = true;
+    state.calls = [];
+    state.controller = new AbortController();
+    $("btnRun").disabled = true;
+    $("btnDeobf").disabled = true;
+    $("btnStop").disabled = false;
+    setStatus("Deobfuscating...", "running");
+    startClock();
+
+    const a = analyzeLuraph(src);
+    state.analysis = a;
+    log(`Loaded ${state.fileName} (${a.bytes.toLocaleString()} bytes)`, "sys");
+    log(a.detected ? `Detected Luraph v${a.version} VM wrapper` : "Luraph v15 signature not confirmed", a.detected ? "sys" : "warn");
+    log(`Functions ≈ ${a.functions.toLocaleString()} · VM markers ${a.vmMarkers}`, "sys");
+
+    const t0 = performance.now();
+
+    try {
+      const response = await fetch("/api/deobfuscate", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ filename: state.fileName, source: src, mode: "full" }),
+        signal: state.controller.signal
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (payload.analysis) state.analysis = payload.analysis;
+      state.engine = payload.engine || (response.ok ? "luraphv15-node" : "static-fallback");
+      state.report = payload.report || null;
+      if (typeof payload.output === "string" && payload.output.length) state.cleaned = payload.output;
+
+      if (response.ok && state.cleaned) {
+        const callCount = state.analysis?.calls?.length || 0;
+        log(`Deobfuscation completed · ${state.cleaned.length.toLocaleString()} output chars`, "out");
+        log(`Static dumpers collected ${callCount.toLocaleString()} call/behavior locations`, "out");
+        switchRight("environment");
+        toast("QyrexDeobf", "Desofuscación y análisis completados.");
+        setStatus("Completed", "success");
+      } else if (state.cleaned) {
+        const msg = payload.error || `HTTP ${response.status}`;
+        log(`Engine fallback: ${msg}`, "warn");
+        log("Static cleanup + dumpers generated.", "out");
+        switchRight("environment");
+        toast("QyrexDeobf", "Se aplicó el pipeline estático de respaldo.");
+        setStatus("Fallback", "warn");
+      } else {
+        throw new Error(payload.error || `HTTP ${response.status}`);
+      }
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        log("Processing stopped by user.", "warn");
+        setStatus("Stopped", "warn");
+      } else {
+        state.cleaned = staticFallback(src, state.analysis || a);
+        state.engine = "static-local";
+        log(`Server request failed: ${error?.message || error}`, "err");
+        log("Local static fallback generated.", "warn");
+        switchRight("environment");
+        setStatus("Fallback", "warn");
+      }
+    } finally {
+      state.running = false;
+      state.controller = null;
+      $("btnRun").disabled = false;
+      $("btnDeobf").disabled = false;
+      $("btnStop").disabled = true;
+      stopClock();
+      renderRight();
+    }
+  }
+
+  function stopRun() {
+    if (state.controller) state.controller.abort();
+  }
+
+  function copyCleaned() {
+    if (!state.cleaned) {
+      toast("QyrexDeobf", "Todavía no hay resultado para copiar.");
+      return;
+    }
+    navigator.clipboard.writeText(state.cleaned)
+      .then(() => toast("QyrexDeobf", "Código limpio copiado."))
+      .catch(() => toast("QyrexDeobf", "El navegador bloqueó el portapapeles."));
+  }
+
+  function downloadText(text, name) {
+    const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  function downloadCleaned() {
+    if (!state.cleaned) {
+      toast("QyrexDeobf", "Todavía no hay resultado para descargar.");
+      return;
+    }
+    const base = state.fileName.replace(/\.(lua|luau|txt)$/i, "");
+    downloadText(state.cleaned, `${base}.deobf.luau`);
+    log(`Downloaded ${base}.deobf.luau`, "out");
+  }
+
+  function saveSource() {
+    if (!state.code) {
+      toast("QyrexDeobf", "No hay código para guardar.");
+      return;
+    }
+    downloadText(state.code, state.fileName.endsWith(".lua") ? state.fileName : "untitled.lua");
+    toast("QyrexDeobf", "Fuente guardada.");
+  }
+
+  function newFile() {
+    state.fileName = "untitled-obfuscated.lua";
+    state.cleaned = "";
+    state.logs = [];
+    state.calls = [];
+    state.report = null;
+    $("tabName").textContent = state.fileName;
+    setCode("");
+    setStatus("Idle", "");
+    $("elapsed").textContent = "00:00.0";
+    renderRight();
+  }
+
+  function clearOutput() {
+    state.logs = [];
+    state.calls = [];
+    $("outCount").textContent = "0";
+    $("behaviorCount").textContent = "0";
+    $("vmCount").textContent = "0";
+    renderRight();
+  }
+
+  function loadFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      state.fileName = file.name;
+      $("tabName").textContent = file.name;
+      setCode(String(reader.result || ""));
+      log(`Loaded ${file.name}`, "out");
+      switchRight("output");
+      toast("QyrexDeobf", `${file.name} cargado.`);
+    };
+    reader.onerror = () => log(`Could not read ${file.name}`, "err");
+    reader.readAsText(file);
+  }
+
+  $("btnNew").addEventListener("click", newFile);
+  $("btnNewTab").addEventListener("click", newFile);
+  $("btnOpen").addEventListener("click", () => $("fileInput").click());
+  $("fileInput").addEventListener("change", e => loadFile(e.target.files?.[0]));
+  $("btnSave").addEventListener("click", saveSource);
+  $("btnRun").addEventListener("click", deobfuscate);
+  $("btnDeobf").addEventListener("click", deobfuscate);
+  $("btnStop").addEventListener("click", stopRun);
+  $("btnCopy").addEventListener("click", copyCleaned);
+  $("sideCopy").addEventListener("click", copyCleaned);
+  $("btnClear").addEventListener("click", clearOutput);
+  $("sideClear").addEventListener("click", clearOutput);
+  $("sideDownload").addEventListener("click", downloadCleaned);
+  $("clearFile").addEventListener("click", newFile);
+  $("code").addEventListener("input", e => {
+    state.code = e.target.value;
+    updateEditorInfo();
+    updatePreflight();
+  });
+  ["keyup","click","select","focus"].forEach(evt => $("code").addEventListener(evt, updateEditorInfo));
+  $("code").addEventListener("scroll", syncScroll);
+
+  document.querySelectorAll(".right-tab").forEach(tab => tab.addEventListener("click", () => switchRight(tab.dataset.right)));
+  document.querySelectorAll(".side-item[data-view]").forEach(item => item.addEventListener("click", () => switchSide(item.dataset.view)));
+
+  $("btnFollow").addEventListener("click", () => {
+    $("rightContent").scrollTop = $("rightContent").scrollHeight;
+    toast("Output", "Scroll fijado al final.");
+  });
+
+  const overlay = $("dropOverlay");
+  let dragDepth = 0;
+  window.addEventListener("dragenter", e => {
+    e.preventDefault();
+    dragDepth++;
+    overlay.classList.add("show");
+  });
+  window.addEventListener("dragover", e => e.preventDefault());
+  window.addEventListener("dragleave", e => {
+    e.preventDefault();
+    dragDepth--;
+    if (dragDepth <= 0) {
+      dragDepth = 0;
+      overlay.classList.remove("show");
+    }
+  });
+  window.addEventListener("drop", e => {
+    e.preventDefault();
+    dragDepth = 0;
+    overlay.classList.remove("show");
+    const file = e.dataTransfer?.files?.[0];
+    if (file) loadFile(file);
+  });
+
+  window.addEventListener("beforeunload", e => {
+    if (state.running) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+  });
+
+  setCode("");
+  renderRight();
+})();
+</script>
+</body>
+</html>
