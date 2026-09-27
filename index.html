@@ -429,7 +429,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     <div class="top-spacer"></div>
 
     <div class="status-wrap">
-      <div class="runtime-pill">Qyrex Browser · Multi-pass</div>
+      <div class="runtime-pill">Qyrex Engine · Multi-pass</div>
       <div class="status"><span class="status-dot" id="statusDot"></span><span id="runStatus">Idle</span></div>
       <span id="elapsed">00:00.0</span>
     </div>
@@ -528,7 +528,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 
 <div class="toast" id="toast"></div>
 
-<script src="./browser-analyzer.js"></script>
+<script src="lib/browser-analyzer.js"></script>
 <script>
 (() => {
   "use strict";
@@ -633,23 +633,33 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
   }
 
   function updatePreflight() {
-    const a = QyrexBrowserAnalyzer.analyze(state.code, state.fileName);
+    const a = analyzeLuraph(state.code);
     state.analysis = a;
-    const isKnown = a.provider && a.provider !== "Unknown";
-    $("detectBadge").textContent = isKnown ? a.provider : "Not detected";
-    $("detectBadge").style.background = isKnown ? "#eaf2ff" : "#f2f5f8";
-    $("detectBadge").style.color = isKnown ? "#2763bd" : "#708197";
-    $("diagnosticText").textContent = isKnown
-      ? `${a.bytes.toLocaleString()} bytes · ${a.functions.toLocaleString()} functions · ${a.dumpers?.vm?.markers?.length || 0} VM markers`
+    $("detectBadge").textContent = a.detected ? `Luraph ${a.version}` : "Not detected";
+    $("detectBadge").style.background = a.detected ? "#eaf2ff" : "#f2f5f8";
+    $("detectBadge").style.color = a.detected ? "#2763bd" : "#708197";
+    $("diagnosticText").textContent = a.detected
+      ? `${a.bytes.toLocaleString()} bytes · ${a.functions.toLocaleString()} functions · VM markers ${a.vmMarkers}`
       : "Carga un script Luau para iniciar el análisis.";
   }
 
   function analyzeLuraph(src) {
-    return QyrexBrowserAnalyzer.analyze(src, state.fileName);
+    const base = window.QyrexBrowserAnalyzer.analyze(src, state?.fileName || "script.lua");
+    const provider = base.provider || "Unknown";
+    const versionMatch = /Luraph[^\n]*?v([\d.]+)/i.exec(src);
+    const detected = provider !== "Unknown";
+    const version = versionMatch ? versionMatch[1] : (provider === "Luraph" ? "15.x" : "—");
+    const vmMarkers = Number(base.dumpers?.vm?.count || 0);
+    return Object.assign(base, {
+      detected,
+      version,
+      vmMarkers,
+      shape: vmMarkers ? "VM / multi-pass candidate" : "Static source"
+    });
   }
 
   function staticFallback(src, analysis) {
-    return QyrexBrowserAnalyzer.cleanSource(src);
+    return window.QyrexBrowserAnalyzer.cleanSource(src);
   }
 
   function renderLogs() {
@@ -681,11 +691,13 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
         ${escapeHtml(a.filename || state.fileName)} · globals: ${escapeHtml((a.globals || []).join(", ") || "none")} · services: ${escapeHtml((a.services || []).join(", ") || "none")}
       </div>
       <div class="dumper-grid">
-        <div class="dumper-card"><div class="name">Strings dumper</div><div class="value">${Number(dumper.strings?.count || 0).toLocaleString()} strings · ${Number(dumper.strings?.decoded?.length || 0).toLocaleString()} decoded candidates</div></div>
-        <div class="dumper-card"><div class="name">Constants dumper</div><div class="value">${Number(dumper.constants?.numberCount || 0).toLocaleString()} numeric constants</div></div>
-        <div class="dumper-card"><div class="name">Calls dumper</div><div class="value">${Number(a.calls?.length || 0).toLocaleString()} call/behavior locations</div></div>
-        <div class="dumper-card"><div class="name">VM dumper</div><div class="value">${Number(a.dumpers?.vm?.markers?.length || 0).toLocaleString()} VM markers detected</div></div>
+        <div class="dumper-card"><div class="name">Strings dumper</div><div class="value">${Number(dumper.strings?.count || 0).toLocaleString()} strings · ${Number(dumper.strings?.decoded?.length || 0).toLocaleString()} decoded · ${Number(dumper.strings?.base64?.length || 0).toLocaleString()} base64 · ${Number(dumper.strings?.hex?.length || 0).toLocaleString()} hex</div></div>
+        <div class="dumper-card"><div class="name">Constants dumper</div><div class="value">${Number(dumper.constants?.numberCount || 0).toLocaleString()} numeric · ${Number(dumper.constants?.assignments?.length || 0).toLocaleString()} constant assignments</div></div>
+        <div class="dumper-card"><div class="name">Calls / environment dumper</div><div class="value">${Number(a.calls?.length || 0).toLocaleString()} call/behavior locations · ${Number(a.environment?.globals?.length || 0)} globals · ${Number(a.libraries?.length || 0)} libraries · ${Number(a.services?.length || 0)} services</div></div>
+        <div class="dumper-card"><div class="name">VM / pack detector</div><div class="value">${Number(a.dumpers?.vm?.count || 0).toLocaleString()} markers · ${(a.dumpers?.vm?.details || []).map(x => escapeHtml(x.name)).slice(0,5).join(", ") || "none"}</div></div>
       </div>
+      ${a.environment?.constants?.length ? `<div class="banner"><strong>Recovered constant environment</strong><br>${a.environment.constants.slice(0,40).map(x => `${escapeHtml(x.name)} = ${escapeHtml(x.value)}`).join("<br>")}</div>` : ""}
+      ${dumper.strings?.decoded?.length ? `<div class="banner"><strong>Decoded string candidates</strong><br>${dumper.strings.decoded.slice(0,20).map(x => `L${x.line}: ${escapeHtml(String(x.decoded).slice(0,320))}`).join("<br>")}</div>` : ""}
       ${state.cleaned ? `<div class="qyrex-codebox"><pre>${escapeHtml(state.cleaned)}</pre></div>` : ""}
     `;
   }
@@ -724,13 +736,14 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
         <div class="env-card"><strong>Services</strong><div class="env-value">${escapeHtml((a.services || []).join("\n") || "—")}</div></div>
         <div class="env-card"><strong>Globals</strong><div class="env-value">${escapeHtml((a.globals || []).join("\n") || "—")}</div></div>
       </div>
+      ${r.dumperPacks ? `<div class="banner"><strong>Enabled dumper packs</strong><br>${r.dumperPacks.map(x => escapeHtml(x)).join("<br>")}</div>` : ""}
       ${r.stdout || r.stderr ? `<div class="qyrex-codebox"><pre>${escapeHtml((r.stdout || "") + (r.stderr ? "\n" + r.stderr : ""))}</pre></div>` : ""}`;
   }
 
   function renderRight() {
     const box = $("rightContent");
     if (state.currentRight === "output") {
-      box.innerHTML = `<div class="banner"><strong>QyrexDeobf</strong><br>Pipeline: detection → dumpers → deobfuscation → behavior/call analysis. The target source is inspected by the local analyzer; GitHub Pages mode: todo el análisis se ejecuta localmente en el navegador y no crea un entorno Roblox real.</div><div id="logArea">${renderLogs()}</div>`;
+      box.innerHTML = `<div class="banner"><strong>QyrexDeobf</strong><br>Pipeline: detection → dumpers → deobfuscation → behavior/call analysis. The target source is inspected by the local analyzer; the browser does not create a live Roblox environment.</div><div id="logArea">${renderLogs()}</div>`;
     } else if (state.currentRight === "calls") {
       box.innerHTML = renderCalls();
     } else if (state.currentRight === "report") {
@@ -772,43 +785,63 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 
     state.running = true;
     state.calls = [];
+    state.report = null;
+    state.controller = new AbortController();
     $("btnRun").disabled = true;
     $("btnDeobf").disabled = true;
-    $("btnStop").disabled = true;
+    $("btnStop").disabled = false;
     setStatus("Analyzing...", "running");
     startClock();
 
-    const t0 = performance.now();
     try {
-      await new Promise(r => setTimeout(r, 25));
-      const a = QyrexBrowserAnalyzer.analyze(src, state.fileName);
+      const t0 = performance.now();
+      await new Promise(resolve => setTimeout(resolve, 0));
+      if (state.controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
+
+      const a = analyzeLuraph(src);
       state.analysis = a;
-      state.engine = "browser-static";
-      state.cleaned = QyrexBrowserAnalyzer.cleanSource(src);
+      state.cleaned = staticFallback(src, a);
+      state.engine = "browser-multi-dumper";
       state.report = {
-        mode: "GitHub Pages / browser",
-        elapsedMs: Math.round(performance.now() - t0),
-        note: "No se ejecuta el script objetivo ni se crea un entorno Roblox real."
+        stdout: "",
+        stderr: "",
+        elapsedMs: performance.now() - t0,
+        dumperPacks: [
+          "25ms-style static decoder",
+          "FlameCoder / HookOp marker detector",
+          "Mimic-style environment and call analyzer",
+          "Larry / Zala call-graph and static dump markers",
+          "Unveilr / Prometheus / IronBrew / MoonVeil / Luarmor signatures"
+        ]
       };
 
       log(`Loaded ${state.fileName} (${a.bytes.toLocaleString()} bytes)`, "sys");
-      log(`Provider: ${a.provider} · ${a.functions.toLocaleString()} functions · ${a.calls.length.toLocaleString()} calls/behaviors`, "sys");
-      log(`Dumpers: ${a.dumpers.strings.count.toLocaleString()} strings · ${a.dumpers.constants.numberCount.toLocaleString()} numeric constants · ${a.dumpers.vm.markers.length} VM markers`, "out");
-      log(`Environment: ${a.globals.length} globals · ${a.services.length} services · ${a.libraries.length} libraries`, "out");
-      log("Browser static cleanup completed.", "out");
+      log(`Provider: ${a.provider} · ${a.functions.toLocaleString()} functions · ${a.lines.toLocaleString()} lines`, "sys");
+      log(`VM/dumper markers: ${Number(a.dumpers?.vm?.count || 0).toLocaleString()}`, "sys");
+      log(`Strings: ${Number(a.dumpers?.strings?.count || 0).toLocaleString()} · decoded: ${Number(a.dumpers?.strings?.decoded?.length || 0).toLocaleString()}`, "out");
+      log(`Base64 candidates: ${Number(a.dumpers?.strings?.base64?.length || 0).toLocaleString()} · hex: ${Number(a.dumpers?.strings?.hex?.length || 0).toLocaleString()}`, "out");
+      log(`Calls/behaviors: ${Number(a.calls?.length || 0).toLocaleString()} · libraries: ${Number(a.libraries?.length || 0).toLocaleString()} · services: ${Number(a.services?.length || 0).toLocaleString()}`, "out");
+      log("Browser multi-dumper completed without executing the target script.", "out");
       switchRight("environment");
-      toast("QyrexDeobf", "Análisis y limpieza local completados.");
+      toast("QyrexDeobf", "Pipeline estático completado.");
       setStatus("Completed", "success");
     } catch (error) {
-      state.cleaned = QyrexBrowserAnalyzer.cleanSource(src);
-      state.engine = "browser-static";
-      log(`Analyzer error: ${error?.message || error}`, "err");
-      setStatus("Fallback", "warn");
-      switchRight("environment");
+      if (error?.name === "AbortError") {
+        log("Processing stopped by user.", "warn");
+        setStatus("Stopped", "warn");
+      } else {
+        log(`Local analyzer failed: ${error?.message || error}`, "err");
+        state.cleaned = staticFallback(src, state.analysis || {});
+        state.engine = "browser-static-fallback";
+        switchRight("environment");
+        setStatus("Fallback", "warn");
+      }
     } finally {
       state.running = false;
+      state.controller = null;
       $("btnRun").disabled = false;
       $("btnDeobf").disabled = false;
+      $("btnStop").disabled = true;
       stopClock();
       renderRight();
     }
