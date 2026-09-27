@@ -1,22 +1,18 @@
-# QyrexDeobf — GitHub Pages
+# QyrexDeobf — GitHub Pages Runtime Build
 
-Versión estática y autocontenida para GitHub Pages. El analizador no ejecuta el script recibido.
+Static GitHub Pages build with:
 
-## Incluye
+- Recursive Base64 / URL-safe Base64 decoding
+- Recursive repeating-key XOR candidates and discovered key extraction
+- Hex / decimal byte / `string.char` / constant folding
+- Dumper signatures for the supplied packs and common Luau obfuscators
+- Calls + Environment static analysis
+- Bounded **Qyrex Safe Luau Trace VM** for observable calls such as `print`, `warn`, `Instance.new`, `game:GetService`, `require` and captured `loadstring` chunks
 
-- Decodificación recursiva de Base64 estándar y URL-safe.
-- Decodificación recursiva de XOR con claves de 1 byte y claves detectadas en expresiones `~` / `bit32.bxor`.
-- Recuperación de `\xNN`, escapes numéricos, `string.char`, `table.concat`, `string.reverse`, `string.rep` y algunas constantes simples.
-- Análisis estático de llamadas, librerías, servicios, globals, filesystem/network, environment y marcadores de VM.
-- El código limpio aparece en **Environment** y se puede copiar/descargar.
+The runtime is a **simulation for tracing**, not a live Roblox or executor environment. Browser/network/filesystem/native executor APIs are not exposed to the submitted source.
 
 ## GitHub Pages
 
-1. Extrae este ZIP en tu repositorio.
-2. Deja `index.html` en la raíz.
-3. Ve a **Settings → Pages**.
-4. Selecciona **Deploy from a branch** y la rama/directorio donde quedó `index.html`.
+Put the contents of this folder in the root of the repository, then enable:
 
-`index.html` contiene el analizador incrustado, por lo que no depende de rutas externas para que `QyrexBrowserAnalyzer.analyze()` exista en Pages.
-
-> Nota: la recuperación estática puede descubrir muchas capas Base64/XOR, pero no puede reconstruir automáticamente una VM propietaria arbitraria ni ejecutar APIs de Roblox/executor desde GitHub Pages.
+`Settings → Pages → Deploy from a branch → / (root)`
