@@ -1,45 +1,22 @@
 # QyrexDeobf — GitHub Pages
 
-Versión estática para GitHub Pages. No necesita Node.js, npm ni `server.js`.
+Versión estática y autocontenida para GitHub Pages. El analizador no ejecuta el script recibido.
 
-## Dumpers integrados
+## Incluye
 
-El paquete usa una implementación propia de navegador basada en las capacidades observables de los proyectos aportados:
+- Decodificación recursiva de Base64 estándar y URL-safe.
+- Decodificación recursiva de XOR con claves de 1 byte y claves detectadas en expresiones `~` / `bit32.bxor`.
+- Recuperación de `\xNN`, escapes numéricos, `string.char`, `table.concat`, `string.reverse`, `string.rep` y algunas constantes simples.
+- Análisis estático de llamadas, librerías, servicios, globals, filesystem/network, environment y marcadores de VM.
+- El código limpio aparece en **Environment** y se puede copiar/descargar.
 
-- 25ms: decodificación de strings y patrones de runtime.
-- FlameCoder / HookOp: marcadores de dispatcher y operaciones instrumentadas.
-- Mimic: análisis de entorno, librerías, servicios, eventos y llamadas por línea.
-- Larry / Zala: constantes, referencias de strings, llamadas y marcadores de call graph.
-- The Big Unveilr: patrones de `ExecEnv`, `ExpressionHooks`, `hookOp` y recuperación estática de constantes.
-- Prometheus: `ConstantArray`, `ProxifyLocals`, `EncryptStrings`, `SplitStrings`, `Vmify`, `WatermarkCheck`.
-- Luraph / IronBrew / MoonVeil / Luarmor / Junkie: detección y heurísticas de VM.
+## GitHub Pages
 
-Además incluye decodificación estática de:
+1. Extrae este ZIP en tu repositorio.
+2. Deja `index.html` en la raíz.
+3. Ve a **Settings → Pages**.
+4. Selecciona **Deploy from a branch** y la rama/directorio donde quedó `index.html`.
 
-- escapes Lua (`\xNN`, escapes numéricos y `\u{...}`)
-- strings `[[...]]` / `[=[...]=]`
-- `string.char`, `utf8.char`, `string.reverse`, `string.rep`, `string.sub`
-- `table.concat` literal
-- concatenación literal `..`
-- `bit32.bxor`, `bit32.bor`, `bit32.band` con constantes
-- candidatos Base64, hex y listas de bytes
-- asignaciones constantes simples y un resumen del entorno
+`index.html` contiene el analizador incrustado, por lo que no depende de rutas externas para que `QyrexBrowserAnalyzer.analyze()` exista en Pages.
 
-## Environment
-
-Muestra el fuente limpiado y el entorno estático recuperado: globals, libraries, services y constantes.
-
-## Calls
-
-Muestra por línea operaciones detectables como `require`, `GetService`, `Instance.new`, `Connect`, `FireServer`, `InvokeServer`, HTTP, WebSocket, filesystem, `loadstring`, `getgenv`, hooks, tasks, coroutines y APIs de executor.
-
-## Importante
-
-GitHub Pages no ejecuta Lune, Roblox ni el script analizado. Por eso los dumpers que en el ZIP original dependen de ejecución dinámica se representan aquí mediante análisis estático seguro y transformaciones de código. Eso permite que la página sea autónoma, pero no garantiza reconstrucción completa de una VM desconocida.
-
-## Publicar
-
-1. Sube `index.html` y la carpeta `lib/` al repositorio.
-2. Ve a **Settings → Pages**.
-3. Selecciona **Deploy from a branch**.
-4. Elige la rama y `/ (root)`.
+> Nota: la recuperación estática puede descubrir muchas capas Base64/XOR, pero no puede reconstruir automáticamente una VM propietaria arbitraria ni ejecutar APIs de Roblox/executor desde GitHub Pages.
