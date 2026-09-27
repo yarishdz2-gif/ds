@@ -1,27 +1,20 @@
-# QyrexDeobf
+# QyrexDeobf — GitHub Pages
 
-QyrexDeobf es una interfaz local para análisis y desofuscación de scripts Lua/Luau. La versión actual combina el motor Luraph v15 disponible por npm con una capa estática multi-paso.
+Versión estática para GitHub Pages.
 
-## Qué se añadió
+## Características
 
-- **Environment:** muestra el código desofuscado/limpio recibido del motor, junto con el resumen del entorno estático.
-- **Calls + output:** enumera por línea comportamientos detectables: `require`, creación de instancias, `GetService`, eventos/remotes, red, archivos, carga dinámica, entornos, hooks, tareas, clipboard, crypto y render.
-- **Dumpers estáticos:** strings, constantes numéricas, llamadas/comportamientos y marcadores de VM.
-- **Detección de perfiles:** Luraph, Prometheus, IronBrew, MoonVeil, Luarmor y VM genérico; los perfiles no-Luraph pasan por limpieza estática en vez de fingir una devirtualización completa.
-- **Folding seguro de constantes simples:** `string.char`, `string.reverse`, `string.rep` y `table.concat` cuando los argumentos son literales.
-- **Servidor:** endpoint `/api/analyze` para inspección independiente y `/api/deobfuscate` para el pipeline completo.
+- Análisis local en el navegador.
+- Detección de perfiles/patrones de Luraph, Prometheus, IronBrew, MoonVeil, Luarmor y VM genérica.
+- Dumpers estáticos de strings, constantes numéricas, llamadas, librerías, servicios, globals y marcadores de VM.
+- Panel **Environment** con el fuente limpiado.
+- Panel **Calls + output** con las operaciones detectables por línea.
+- No ejecuta el script de entrada ni crea un entorno Roblox real.
 
-## Instalación
+## Publicar
 
-Requiere Node.js 18+.
+1. Sube el contenido de esta carpeta a un repositorio de GitHub.
+2. En **Settings → Pages**, selecciona **Deploy from a branch**.
+3. Elige la rama, carpeta `/ (root)` y guarda.
 
-```bash
-npm install
-npm start
-```
-
-Abre `http://localhost:3000`. El motor Luraph v15 se usa cuando `node_modules/luraphv15-node` está presente.
-
-## Nota de seguridad
-
-Los “Calls” y “Environment” de esta capa son análisis del texto fuente y no equivalen a ejecutar el script dentro de un cliente Roblox real. El motor de desofuscación es un proceso separado y el proyecto ya limita su tiempo de ejecución.
+No necesita Node.js, npm ni servidor backend.

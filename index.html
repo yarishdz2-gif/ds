@@ -429,7 +429,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     <div class="top-spacer"></div>
 
     <div class="status-wrap">
-      <div class="runtime-pill">Qyrex Engine · Multi-pass</div>
+      <div class="runtime-pill">Qyrex Browser · Multi-pass</div>
       <div class="status"><span class="status-dot" id="statusDot"></span><span id="runStatus">Idle</span></div>
       <span id="elapsed">00:00.0</span>
     </div>
@@ -528,6 +528,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 
 <div class="toast" id="toast"></div>
 
+<script src="./browser-analyzer.js"></script>
 <script>
 (() => {
   "use strict";
@@ -632,69 +633,23 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
   }
 
   function updatePreflight() {
-    const a = analyzeLuraph(state.code);
+    const a = QyrexBrowserAnalyzer.analyze(state.code, state.fileName);
     state.analysis = a;
-    $("detectBadge").textContent = a.detected ? `Luraph ${a.version}` : "Not detected";
-    $("detectBadge").style.background = a.detected ? "#eaf2ff" : "#f2f5f8";
-    $("detectBadge").style.color = a.detected ? "#2763bd" : "#708197";
-    $("diagnosticText").textContent = a.detected
-      ? `${a.bytes.toLocaleString()} bytes · ${a.functions.toLocaleString()} functions · VM markers ${a.vmMarkers}`
+    const isKnown = a.provider && a.provider !== "Unknown";
+    $("detectBadge").textContent = isKnown ? a.provider : "Not detected";
+    $("detectBadge").style.background = isKnown ? "#eaf2ff" : "#f2f5f8";
+    $("detectBadge").style.color = isKnown ? "#2763bd" : "#708197";
+    $("diagnosticText").textContent = isKnown
+      ? `${a.bytes.toLocaleString()} bytes · ${a.functions.toLocaleString()} functions · ${a.dumpers?.vm?.markers?.length || 0} VM markers`
       : "Carga un script Luau para iniciar el análisis.";
   }
 
   function analyzeLuraph(src) {
-    const hasHeader = /This file was protected using Luraph Obfuscator v([\d.]+)/i.exec(src);
-    const hasTable = /return\s+setmetatable\s*\(\s*\{/i.test(src);
-    const hasYA = /\.YA\s*\(\s*\)/i.test(src);
-    const hasBuffer = /\bbuffer\.(readu8|writeu32|fromstring|tostring|len)\b/i.test(src);
-    const hasDispatch = /while\s+true\s+do[\s\S]{0,9000}if\s+[A-Za-z_]\w*\s*<=\s*\d+/i.test(src);
-    const detected = Boolean(hasHeader || (hasTable && hasYA && hasBuffer));
-    const version = hasHeader ? hasHeader[1] : (detected ? "15.x" : "—");
-    const functions = (src.match(/\bfunction\b/g) || []).length;
-    const strings = [...src.matchAll(/"(?:\\.|[^"\\])*"/gs)].map(m => m[0].length).sort((a,b)=>b-a);
-    const vmMarkers = [
-      hasTable && "setmetatable",
-      hasYA && "YA",
-      hasBuffer && "buffer",
-      hasDispatch && "dispatcher"
-    ].filter(Boolean).length;
-
-    const globals = [];
-    for (const name of ["game","getgenv","workspace","loadstring","buffer","bit32","Instance"]) {
-      if (new RegExp("\\b" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b").test(src)) globals.push(name);
-    }
-
-    return {
-      detected,
-      version,
-      bytes: new TextEncoder().encode(src).length,
-      lines: lineCount(src),
-      functions,
-      stringCount: strings.length,
-      largestStrings: strings.slice(0, 3),
-      vmMarkers,
-      globals,
-      shape: hasTable && hasYA ? "VM wrapper" : "Unknown"
-    };
+    return QyrexBrowserAnalyzer.analyze(src, state.fileName);
   }
 
   function staticFallback(src, analysis) {
-    let cleaned = src;
-    const version = analysis?.version || "15.x";
-    cleaned = cleaned
-      .replace(/--\s*This file was protected using Luraph Obfuscator v[\d.]+\s*\[https:\/\/lura\.ph\/\]\s*/i,
-        `-- QyrexDeobf static analysis · Luraph v${version}\n`)
-      .replace(/\r\n/g, "\n")
-      .replace(/;\s*/g, ";\n");
-
-    return [
-      `-- QyrexDeobf`,
-      `-- Luraph v${version} detected`,
-      `-- Static fallback: structure cleaned, VM not devirtualized in-browser`,
-      `-- Use a configured Qyrex server engine for full source recovery.`,
-      ``,
-      cleaned
-    ].join("\n");
+    return QyrexBrowserAnalyzer.cleanSource(src);
   }
 
   function renderLogs() {
@@ -775,7 +730,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
   function renderRight() {
     const box = $("rightContent");
     if (state.currentRight === "output") {
-      box.innerHTML = `<div class="banner"><strong>QyrexDeobf</strong><br>Pipeline: detection → dumpers → deobfuscation → behavior/call analysis. The target source is inspected by the local analyzer; the browser does not create a live Roblox environment.</div><div id="logArea">${renderLogs()}</div>`;
+      box.innerHTML = `<div class="banner"><strong>QyrexDeobf</strong><br>Pipeline: detection → dumpers → deobfuscation → behavior/call analysis. The target source is inspected by the local analyzer; GitHub Pages mode: todo el análisis se ejecuta localmente en el navegador y no crea un entorno Roblox real.</div><div id="logArea">${renderLogs()}</div>`;
     } else if (state.currentRight === "calls") {
       box.innerHTML = renderCalls();
     } else if (state.currentRight === "report") {
@@ -817,70 +772,43 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 
     state.running = true;
     state.calls = [];
-    state.controller = new AbortController();
     $("btnRun").disabled = true;
     $("btnDeobf").disabled = true;
-    $("btnStop").disabled = false;
-    setStatus("Deobfuscating...", "running");
+    $("btnStop").disabled = true;
+    setStatus("Analyzing...", "running");
     startClock();
 
-    const a = analyzeLuraph(src);
-    state.analysis = a;
-    log(`Loaded ${state.fileName} (${a.bytes.toLocaleString()} bytes)`, "sys");
-    log(a.detected ? `Detected Luraph v${a.version} VM wrapper` : "Luraph v15 signature not confirmed", a.detected ? "sys" : "warn");
-    log(`Functions ≈ ${a.functions.toLocaleString()} · VM markers ${a.vmMarkers}`, "sys");
-
     const t0 = performance.now();
-
     try {
-      const response = await fetch("/api/deobfuscate", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({ filename: state.fileName, source: src, mode: "full" }),
-        signal: state.controller.signal
-      });
+      await new Promise(r => setTimeout(r, 25));
+      const a = QyrexBrowserAnalyzer.analyze(src, state.fileName);
+      state.analysis = a;
+      state.engine = "browser-static";
+      state.cleaned = QyrexBrowserAnalyzer.cleanSource(src);
+      state.report = {
+        mode: "GitHub Pages / browser",
+        elapsedMs: Math.round(performance.now() - t0),
+        note: "No se ejecuta el script objetivo ni se crea un entorno Roblox real."
+      };
 
-      const payload = await response.json().catch(() => ({}));
-      if (payload.analysis) state.analysis = payload.analysis;
-      state.engine = payload.engine || (response.ok ? "luraphv15-node" : "static-fallback");
-      state.report = payload.report || null;
-      if (typeof payload.output === "string" && payload.output.length) state.cleaned = payload.output;
-
-      if (response.ok && state.cleaned) {
-        const callCount = state.analysis?.calls?.length || 0;
-        log(`Deobfuscation completed · ${state.cleaned.length.toLocaleString()} output chars`, "out");
-        log(`Static dumpers collected ${callCount.toLocaleString()} call/behavior locations`, "out");
-        switchRight("environment");
-        toast("QyrexDeobf", "Desofuscación y análisis completados.");
-        setStatus("Completed", "success");
-      } else if (state.cleaned) {
-        const msg = payload.error || `HTTP ${response.status}`;
-        log(`Engine fallback: ${msg}`, "warn");
-        log("Static cleanup + dumpers generated.", "out");
-        switchRight("environment");
-        toast("QyrexDeobf", "Se aplicó el pipeline estático de respaldo.");
-        setStatus("Fallback", "warn");
-      } else {
-        throw new Error(payload.error || `HTTP ${response.status}`);
-      }
+      log(`Loaded ${state.fileName} (${a.bytes.toLocaleString()} bytes)`, "sys");
+      log(`Provider: ${a.provider} · ${a.functions.toLocaleString()} functions · ${a.calls.length.toLocaleString()} calls/behaviors`, "sys");
+      log(`Dumpers: ${a.dumpers.strings.count.toLocaleString()} strings · ${a.dumpers.constants.numberCount.toLocaleString()} numeric constants · ${a.dumpers.vm.markers.length} VM markers`, "out");
+      log(`Environment: ${a.globals.length} globals · ${a.services.length} services · ${a.libraries.length} libraries`, "out");
+      log("Browser static cleanup completed.", "out");
+      switchRight("environment");
+      toast("QyrexDeobf", "Análisis y limpieza local completados.");
+      setStatus("Completed", "success");
     } catch (error) {
-      if (error?.name === "AbortError") {
-        log("Processing stopped by user.", "warn");
-        setStatus("Stopped", "warn");
-      } else {
-        state.cleaned = staticFallback(src, state.analysis || a);
-        state.engine = "static-local";
-        log(`Server request failed: ${error?.message || error}`, "err");
-        log("Local static fallback generated.", "warn");
-        switchRight("environment");
-        setStatus("Fallback", "warn");
-      }
+      state.cleaned = QyrexBrowserAnalyzer.cleanSource(src);
+      state.engine = "browser-static";
+      log(`Analyzer error: ${error?.message || error}`, "err");
+      setStatus("Fallback", "warn");
+      switchRight("environment");
     } finally {
       state.running = false;
-      state.controller = null;
       $("btnRun").disabled = false;
       $("btnDeobf").disabled = false;
-      $("btnStop").disabled = true;
       stopClock();
       renderRight();
     }
