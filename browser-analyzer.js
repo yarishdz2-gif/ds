@@ -950,10 +950,10 @@
         const arg = loader[1].trim();
         const val = literalValue(arg, Object.create(null));
         if (val.known && val.type === 'string' && looksLikeLuaSource(val.value)) {
-          src = val.value.trim();
+          return { source: val.value.trim(), recovered: true, method: 'loader-literal' };
         } else {
           const q = unquoteLiteral(arg);
-          if (q !== null && looksLikeLuaSource(q)) src = q.trim();
+          if (q !== null && looksLikeLuaSource(q)) return { source: q.trim(), recovered: true, method: 'loader-literal' };
         }
       }
       src = foldPureCalls(src);
@@ -967,9 +967,10 @@
     // return that payload instead of the wrapper/decoder scaffolding.
     const assignments = Object.create(null);
     let m;
-    const assignRe = /\b(?:local\s+)?([A-Za-z_]\w*)\s*=\s*("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\[=+\[[\s\S]*?\]=+\])/g;
+    const assignRe = /\b(?:local\s+)?([A-Za-z_]\w*)\s*=\s*((?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\[=+\[[\s\S]*?\]=+\]))/g;
     while ((m = assignRe.exec(src))) {
-      const q = m[3][0] === '[' ? parseLongBracket(m[3]) : unquoteLiteral(m[3]);
+      const rawValue = m[2];
+      const q = rawValue[0] === '[' ? parseLongBracket(rawValue) : unquoteLiteral(rawValue);
       if (q !== null) assignments[m[1]] = q;
     }
     const loaderRef = /\b(?:loadstring|load)\s*\(\s*([A-Za-z_]\w*)\s*\)/g;
@@ -1053,6 +1054,9 @@
     // Final payload extraction: remove decoder scaffolding and keep the program that Roblox would receive.
     const ultimate = extractUltimatePayload(out);
     out = ultimate.source || out || original || '';
+    // Repair a final-pass escaping artifact where a recovered Lua argument
+    // ends up as print("text\") instead of print("text").
+    out = out.replace(/([A-Za-z_]\w*\s*\(\s*["'])([^\n]*?)\\(["'])\s*\)/g, '$1$2$3)');
     return out.trimEnd() + '\n';
   }
 
