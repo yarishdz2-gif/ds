@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#f8fafc">
-<title>QyrexDeobf</title>
+<title>QyrexDeobf — Multi-layer (Base64 · XOR · Hex · URL · Luraph-aware)</title>
 <style>
 :root{
   --bg:#f7f9fc;
@@ -423,13 +423,13 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 
       <button class="tool-btn primary" id="btnRun"><span class="icon">▶</span><span class="label">Run</span></button>
       <button class="tool-btn stop" id="btnStop" disabled><span class="icon">■</span><span class="label">Stop</span></button>
-      <button class="tool-btn" id="btnDeobf"><span class="icon">◇</span><span class="label">Deobfuscate</span></button>
+      <button class="tool-btn" id="btnDeobf"><span class="icon">◇</span><span class="label">Deobfuscate ALL</span></button>
     </div>
 
     <div class="top-spacer"></div>
 
     <div class="status-wrap">
-      <div class="runtime-pill">Qyrex Engine · Multi-pass</div>
+      <div class="runtime-pill">Qyrex Engine · DE TODO (Base64/XOR/Hex/URL/Reverse/char)</div>
       <div class="status"><span class="status-dot" id="statusDot"></span><span id="runStatus">Idle</span></div>
       <span id="elapsed">00:00.0</span>
     </div>
@@ -522,7 +522,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 <div class="drop-overlay" id="dropOverlay">
   <div class="drop-box">
     <strong>Suelta tu archivo Luau aquí</strong>
-    <span>QyrexDeobf detectará Luraph, VM y patrones de otros obfuscadores y preparará el análisis.</span>
+    <span>QyrexDeobf desofusca capas Base64, XOR, Hex, URL, decimal, reverse, string.char y detecta Luraph / Prometheus / IronBrew / más.</span>
   </div>
 </div>
 
@@ -533,8 +533,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 (function () {
   'use strict';
 
-  // QyrexDeobf browser dumper pack.
-  // Static dumper/decoder layer. Runtime tracing is implemented separately as a bounded safe VM.
+  // QyrexDeobf browser multi-layer deobfuscator (Base64/XOR/Hex/URL/Decimal/Reverse/string.char/Luraph-aware).
+  // Static only: submitted source is never executed as live Roblox code.
 
   const LUA_KEYWORDS = new Set([
     'and','break','do','else','elseif','end','false','for','function','goto',
@@ -759,8 +759,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 
   function foldPureCalls(src) {
     let out = String(src || '');
-    const callRe = /\b(string\.(?:char|reverse|rep|sub)|utf8\.char|table\.concat|bit32\.(?:bxor|bor|band)|(?:toString|tonumber|tostring))\s*\(([\s\S]*?)\)/g;
-    for (let pass = 0; pass < 8; pass++) {
+    const callRe = /\b(string\.(?:char|reverse|rep|sub|byte|lower|upper)|utf8\.char|table\.concat|bit32\.(?:bxor|bor|band|lshift|rshift)|(?:toString|tonumber|tostring))\s*\(([\s\S]*?)\)/g;
+    for (let pass = 0; pass < 12; pass++) {
       let changed = false;
       out = out.replace(callRe, (full, name, args) => {
         const val = evaluateCall(name === 'toString' ? 'tostring' : name, args, Object.create(null));
@@ -768,12 +768,26 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
         changed = true;
         return val.type === 'string' ? luaStringEscape(val.value) : String(val.value);
       });
+      // string concatenation folding
       out = out.replace(/((?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'))\s*\.\.\s*((?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'))/g, (full,a,b) => {
         const av=unquoteLiteral(a), bv=unquoteLiteral(b);
         if(av===null||bv===null)return full;
         changed=true; return luaStringEscape(av+bv);
       });
-      out = out.replace(/\{\s*((?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')\s*(?:,\s*(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')\s*)*)\s*\}\s*/g, m => m);
+      // Fold long chains of .. of numbers via string.char style: string.char(65)..string.char(66)
+      out = out.replace(/(?:string\.char|utf8\.char)\s*\(\s*(\d{1,3})\s*\)(?:\s*\.\.\s*(?:string\.char|utf8\.char)\s*\(\s*(\d{1,3})\s*\))+/g, (full) => {
+        const nums = [...full.matchAll(/\((\d{1,3})\)/g)].map(m => Number(m[1]));
+        if (!nums.length || nums.some(n => n > 255)) return full;
+        changed = true;
+        return luaStringEscape(String.fromCharCode(...nums));
+      });
+      // {65,66,67} style tables near string.char
+      out = out.replace(/string\.char\s*\(\s*table\.unpack\s*\(\s*\{([^}]*)\}\s*\)\s*\)/gi, (full, body) => {
+        const nums = body.split(',').map(x => Number(x.trim())).filter(n => Number.isInteger(n) && n >= 0 && n <= 255);
+        if (nums.length < 2) return full;
+        changed = true;
+        return luaStringEscape(String.fromCharCode(...nums));
+      });
       if (!changed) break;
     }
     return out;
@@ -908,7 +922,37 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     return best;
   }
 
-  function recursiveDecodeString(value, keyPool, maxDepth = 5) {
+  function decodeUrlPercent(text) {
+    try {
+      if (!/%[0-9a-fA-F]{2}/.test(text)) return null;
+      const decoded = decodeURIComponent(text.replace(/\+/g, ' '));
+      return decoded !== text ? decoded : null;
+    } catch (_) { return null; }
+  }
+
+  function decodeDecimalBytes(text) {
+    const s = String(text || '').trim();
+    // "65,66,67" or "65 66 67" or "{65,66,67}"
+    const cleaned = s.replace(/^\{|\}$/g, '').trim();
+    if (!/^\d{1,3}(?:\s*[,;\s]\s*\d{1,3}){2,}$/.test(cleaned)) return null;
+    const nums = cleaned.split(/[,;\s]+/).map(Number);
+    if (nums.some(n => !Number.isInteger(n) || n < 0 || n > 255) || nums.length < 3) return null;
+    return bytesToLatin1(Uint8Array.from(nums));
+  }
+
+  function decodeOctalEscapes(text) {
+    if (!/\\[0-7]{1,3}/.test(text)) return null;
+    const out = text.replace(/\\([0-7]{1,3})/g, (_, o) => String.fromCharCode(parseInt(o, 8) & 0xFF));
+    return out !== text ? out : null;
+  }
+
+  function tryReverse(text) {
+    const s = String(text || '');
+    if (s.length < 8) return null;
+    return s.split('').reverse().join('');
+  }
+
+  function recursiveDecodeString(value, keyPool, maxDepth = 8) {
     let current = String(value || ''), changed = false, layers = [];
     for (let depth = 0; depth < maxDepth; depth++) {
       const candidates = [];
@@ -919,14 +963,13 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
         const decoded = bytesToLatin1(b64);
         const quality = textQualityScore(decoded);
         const low = decoded.toLowerCase();
-        const useful = /(?:local\s+|function\s+|return\s+|game[.:]|workspace|require\s*\(|instance\.new|getservice|string\.|table\.)/.test(low);
+        const useful = /(?:local\s+|function\s+|return\s+|game[.:]|workspace|require\s*\(|instance\.new|getservice|string\.|table\.|print\s*\(|warn\s*\(|loadstring\s*\(|task\.|getgenv|getfenv|shared)/.test(low);
         const nestedXor = bestXorCandidate(decoded, keyPool);
         const nestedUseful = !!nestedXor?.useful;
-        const nestedB64Bytes = decodeBase64Bytes(decoded);
-        const nestedB64Text = nestedB64Bytes ? bytesToLatin1(nestedB64Bytes) : '';
-        const nestedB64Lua = !!nestedB64Bytes && printableScore(nestedB64Text) >= 0.62 && textQualityScore(nestedB64Text) >= 0.42;
-        if (printableScore(decoded) >= 0.55 && (useful || quality >= currentQuality + 0.10 || nestedUseful || nestedB64Lua)) {
-          candidates.push({ value:decoded, method:'base64', quality:quality + (useful ? 0.12 : 0) + (nestedUseful ? 0.10 : 0) + (nestedB64Lua ? 0.15 : 0) });
+        const isClearB64 = /^[A-Za-z0-9+/_-]+={0,2}$/.test(current.replace(/\s+/g,'')) && current.replace(/\s+/g,'').length >= 8;
+        const looksNextLayer = /^(?:[0-9a-fA-F]{8,}|[A-Za-z0-9+/_-]{12,}={0,2})$/.test(decoded.replace(/\s+/g,''));
+        if (printableScore(decoded) >= 0.48 && (useful || quality >= currentQuality + (isClearB64 ? 0.002 : 0.08) || nestedUseful || (isClearB64 && (quality >= 0.50 || looksNextLayer)))) {
+          candidates.push({ value:decoded, method:'base64', quality:quality + (useful ? 0.12 : 0) + (nestedUseful ? 0.10 : 0) + (isClearB64 ? 0.04 : 0) + (looksNextLayer ? 0.06 : 0) });
         }
       }
 
@@ -936,8 +979,42 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
         for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
         const decoded = bytesToLatin1(bytes);
         const quality = textQualityScore(decoded);
-        if (printableScore(decoded) >= 0.70 && quality > currentQuality + 0.06) {
+        if (printableScore(decoded) >= 0.65 && quality > currentQuality + 0.05) {
           candidates.push({ value:decoded, method:'hex', quality });
+        }
+      }
+
+      // URL percent-encoding
+      const url = decodeUrlPercent(current);
+      if (url) {
+        const quality = textQualityScore(url);
+        if (quality > currentQuality + 0.04) candidates.push({ value:url, method:'url', quality });
+      }
+
+      // Decimal byte sequences (common in string.char tables dumped as text)
+      const dec = decodeDecimalBytes(current);
+      if (dec) {
+        const quality = textQualityScore(dec);
+        if (printableScore(dec) >= 0.70 && quality > currentQuality + 0.05) {
+          candidates.push({ value:dec, method:'decimal-bytes', quality });
+        }
+      }
+
+      // Octal escape sequences
+      const oct = decodeOctalEscapes(current);
+      if (oct) {
+        const quality = textQualityScore(oct);
+        if (quality > currentQuality + 0.03) candidates.push({ value:oct, method:'octal', quality });
+      }
+
+      // Reverse (often paired with base64)
+      const rev = tryReverse(current);
+      if (rev) {
+        const quality = textQualityScore(rev);
+        // only accept if clearly better or leads to base64/hex
+        const looksEncoded = decodeBase64Bytes(rev) || (/^[0-9a-fA-F]{16,}$/.test(rev.replace(/\s/g,'')));
+        if (looksEncoded || quality > currentQuality + 0.12) {
+          candidates.push({ value:rev, method:'reverse', quality: quality + (looksEncoded ? 0.08 : 0) });
         }
       }
 
@@ -967,7 +1044,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
       const parsed = raw[0] === '[' ? { value: parseLongBracket(raw), kind:'long' } : parseQuoted(raw);
       const value = parsed?.value ?? '';
       if (!value || value.length > 250000) return raw;
-      const result = recursiveDecodeString(value, keys, 6);
+      const result = recursiveDecodeString(value, keys, 8);
       if (!result.changed || result.value === value) return raw;
       changedCount++;
       if (result.value.includes('\n') || result.value.includes('\r')) return `[=[${result.value}]=]`;
@@ -975,7 +1052,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     });
     // Also decode raw Base64 blobs that are not inside quotes when they are long enough.
     out = out.replace(/\b[A-Za-z0-9+/_-]{24,}={0,2}\b/g, (token) => {
-      const decoded = recursiveDecodeString(token, keys, 5);
+      const decoded = recursiveDecodeString(token, keys, 8);
       if (!decoded.changed || decoded.value === token) return token;
       changedCount++;
       return luaStringEscape(decoded.value);
@@ -1142,7 +1219,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     out=out.replace(/[ \t]+\n/g,'\n').replace(/\n{4,}/g,'\n\n\n').trim();
     return [
       '-- QyrexDeobf browser multi-dumper',
-      '-- Static deobfuscation output. Runtime behavior is traced separately by Qyrex Safe Luau Trace VM.',
+      '-- Static analysis only: target code was not executed.',
       `-- Provider hint: ${detectProvider(src)}`,
       `-- Recursive decoders: ${decodedLayers.changedCount} string/blob layer(s)`,
       ''
@@ -1350,7 +1427,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 
   function renderLogs() {
     if (!state.logs.length) {
-      return `<div class="empty">Listo. Abre o pega un script y pulsa <b>Run</b> o <b>Deobfuscate</b>.</div>`;
+      return `<div class="empty">Listo. Abre o pega un script y pulsa <b>Run</b> o <b>Deobfuscate ALL</b>.</div>`;
     }
     return state.logs.map((item) => `
       <div class="log-line">

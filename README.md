@@ -1,18 +1,26 @@
-# QyrexDeobf — GitHub Pages Runtime Build
+# QyrexDeobf — GitHub Pages (DE TODO)
 
-Static GitHub Pages build with:
+Runtime estático para desofuscar scripts Luau/Lua ofuscados.
 
-- Recursive Base64 / URL-safe Base64 decoding
-- Recursive repeating-key XOR candidates and discovered key extraction
-- Hex / decimal byte / `string.char` / constant folding
-- Dumper signatures for the supplied packs and common Luau obfuscators
-- Calls + Environment static analysis
-- Bounded **Qyrex Safe Luau Trace VM** for observable calls such as `print`, `warn`, `Instance.new`, `game:GetService`, `require` and captured `loadstring` chunks
+## Capas que maneja
+- Base64 / URL-safe Base64 (recursivo, hasta 8 capas)
+- XOR con clave repetida + extracción automática de claves
+- Hex, decimal-bytes, octal escapes
+- URL percent-encoding
+- Reverse + combinaciones
+- string.char / utf8.char / table.concat folding
+- Detección Luraph v14/v15, Prometheus, IronBrew, Moonsec, etc.
+- Trace seguro (Qyrex Safe Luau Trace VM) sin ejecutar código peligroso
 
-The runtime is a **simulation for tracing**, not a live Roblox or executor environment. Browser/network/filesystem/native executor APIs are not exposed to the submitted source.
+## Uso en GitHub Pages
+1. Sube **todo el contenido de esta carpeta** a la raíz de un repositorio
+2. Settings → Pages → Deploy from a branch → `/ (root)`
+3. Abre la URL y pega el script ofuscado
 
-## GitHub Pages
+O abre `index.html` localmente en el navegador.
 
-Put the contents of this folder in the root of the repository, then enable:
-
-`Settings → Pages → Deploy from a branch → / (root)`
+## Archivos
+- `index.html` — UI + analizador embebido (self-contained)
+- `lib/browser-analyzer.js` — misma lógica (opcional, por si se carga externo)
+- `.nojekyll` — necesario para GitHub Pages
+- `README.md` — este archivo
