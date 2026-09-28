@@ -1472,6 +1472,89 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
   }
 
 
+
+  function scoreLuaProgram(text) {
+    const s = String(text || '').trim();
+    if (!s || s.length > 1000000) return -1;
+    let score = textQualityScore(s);
+    if (/\bprint\s*\(/i.test(s)) score += 0.30;
+    if (/\b(?:warn|error)\s*\(/i.test(s)) score += 0.10;
+    if (/\bInstance\s*\.\s*new\s*\(/i.test(s)) score += 0.25;
+    if (/\bgame\s*:\s*GetService\s*\(/i.test(s)) score += 0.18;
+    if (/\b(?:ScreenGui|Frame|TextLabel|TextButton|TextBox|ImageLabel|ImageButton)\b/i.test(s)) score += 0.12;
+    if (/\b(?:function|local|return|if|for|while|repeat)\b/i.test(s)) score += 0.08;
+    return score;
+  }
+
+  function extractUltimatePayload(source) {
+    let src = String(source || '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').trim();
+    if (!src) return { source: '', recovered: false, method: 'empty' };
+
+    // Prefer the argument of a loader when it can be statically recovered.
+    for (let pass = 0; pass < 8; pass++) {
+      const before = src;
+      const loader = /\b(?:loadstring|load)\s*\(\s*([\s\S]*?)\s*\)\s*(?:\(\s*\))?/i.exec(src);
+      if (loader) {
+        const arg = loader[1].trim();
+        const val = literalValue(arg, Object.create(null));
+        if (val.known && val.type === 'string' && looksLikeLuaSource(val.value)) {
+          src = val.value.trim();
+        } else {
+          const q = unquoteLiteral(arg);
+          if (q !== null && looksLikeLuaSource(q)) src = q.trim();
+        }
+      }
+      src = foldPureCalls(src);
+      src = decodeAllLayers(src).source;
+      src = applyKnownDecoders(src).source;
+      src = foldPureCalls(src);
+      if (src === before) break;
+    }
+
+    // If a decoded source is stored in one variable and later handed to loadstring/load,
+    // return that payload instead of the wrapper/decoder scaffolding.
+    const assignments = Object.create(null);
+    let m;
+    const assignRe = /\b(?:local\s+)?([A-Za-z_]\w*)\s*=\s*("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\[=+\[[\s\S]*?\]=+\])/g;
+    while ((m = assignRe.exec(src))) {
+      const q = m[3][0] === '[' ? parseLongBracket(m[3]) : unquoteLiteral(m[3]);
+      if (q !== null) assignments[m[1]] = q;
+    }
+    const loaderRef = /\b(?:loadstring|load)\s*\(\s*([A-Za-z_]\w*)\s*\)/g;
+    while ((m = loaderRef.exec(src))) {
+      const payload = assignments[m[1]];
+      if (payload && looksLikeLuaSource(payload)) return { source: payload.trim(), recovered: true, method: 'loader-variable' };
+    }
+
+    // Find a dominant Lua string payload. Only use this when the surrounding source clearly
+    // looks like an obfuscation wrapper, preventing normal `local message = "hello"` code from being replaced.
+    const wrapperLike = /\b(?:loadstring|load|decode|decrypt|base64|xor|string\.byte|string\.char|bit32\.|crypt\.)\b/i.test(src);
+    if (wrapperLike) {
+      const candidates = [];
+      const strings = extractStrings(src);
+      for (const item of strings) {
+        const val = String(item.decoded || '').trim();
+        if (!looksLikeLuaSource(val) || val.length < 8) continue;
+        candidates.push({ value: val, score: scoreLuaProgram(val) + Math.min(0.2, val.length / 200000) });
+      }
+      candidates.sort((a,b) => b.score - a.score);
+      if (candidates.length) return { source: candidates[0].value.trim(), recovered: true, method: 'dominant-decoded-payload' };
+    }
+
+    // A single clear program after decoder passes should be preferred over noisy wrappers.
+    const normalized = src.replace(/\n{3,}/g, '\n\n').trim();
+    const wrapperLines = normalized.split('\n').filter(Boolean);
+    const meaningful = wrapperLines.filter(line => !/^\s*(?:local\s+)?(?:base64decode|decode|decrypt|xor|data|payload|key)\s*=/.test(line));
+    if (wrapperLines.length && meaningful.length && meaningful.length <= 8) {
+      const candidate = meaningful.join('\n').trim();
+      if (scoreLuaProgram(candidate) >= 0.95 && /\b(?:print|warn|error|Instance\.new|game\s*[:.])\b/i.test(candidate)) {
+        return { source: candidate, recovered: candidate !== source.trim(), method: 'clean-program' };
+      }
+    }
+
+    return { source: src, recovered: src !== String(source || '').trim(), method: src !== String(source || '').trim() ? 'normalized' : 'none' };
+  }
+
   function cleanSource(src) {
     const original = String(src || '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
     let out = original;
@@ -1515,8 +1598,10 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     if (/\b(?:print|game|Instance|require|task)\b/.test(out) && totalCustom + totalLayers > 0) {
       out = out.replace(/\n?local\s+function\s+(?:base64decode|decode|decrypt)\s*\([\s\S]*?\nend\s*/gi, '\n');
     }
-    // Output is the recovered source itself. Metadata belongs in the UI, not in the Lua result.
-    return (out || original || '').trimEnd() + '\n';
+    // Final payload extraction: remove decoder scaffolding and keep the program that Roblox would receive.
+    const ultimate = extractUltimatePayload(out);
+    out = ultimate.source || out || original || '';
+    return out.trimEnd() + '\n';
   }
 
   function analyze(src, filename='script.lua') {
@@ -1574,11 +1659,10 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
   }
 
   window.QyrexBrowserAnalyzer = {
-    analyze, cleanSource, foldPureCalls, extractStrings, extractEncodedCandidates, decodeAllLayers, recursiveDecodeString,
+    analyze, cleanSource, extractUltimatePayload, foldPureCalls, extractStrings, extractEncodedCandidates, decodeAllLayers, recursiveDecodeString,
     identifyVMMarkers, detectProvider
   };
 })();
-
 </script>
 <script>
 (() => {
@@ -1793,44 +1877,44 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
   }
 
   function renderPlayOutput() {
-    const src = String(state.cleaned || state.code || '');
-    if (!src.trim() && !state.runtime) return `<div class="empty">Listo. Ejecuta <b>Run</b> para simular el script y ver PRINT, UI, eventos y demás salidas.</div>`;
-    const runtime = state.runtime || { stdout: [], stderr: [], calls: [], steps: 0 };
-    const runtimeEvents = [];
+    const src = String(state.cleaned || state.code || '').trim();
+    if (!src && !state.runtime) return `<div class="empty">Listo. Pulsa <b>Run</b> para compilar el Luau recuperado y simularlo dentro del entorno Roblox.</div>`;
+    const runtime = state.runtime || { stdout: [], stderr: [], calls: [], steps: 0, tree: [] };
     const stdout = Array.isArray(runtime.stdout) ? runtime.stdout : [];
     const stderr = Array.isArray(runtime.stderr) ? runtime.stderr : [];
-    stdout.forEach((message, i) => runtimeEvents.push({ kind: 'print', time: i, message: String(message) }));
-    stderr.forEach((message, i) => runtimeEvents.push({ kind: /error:/i.test(String(message)) ? 'error' : 'warn', time: i, message: String(message) }));
+    const visibleKinds = new Set(['print','warn','error','ui','event','remote','network','library','service','instance']);
+    const raw = [];
+    stdout.forEach((message, i) => raw.push({ kind:'print', time:i, message:String(message) }));
+    stderr.forEach((message, i) => raw.push({ kind:/^error:/i.test(String(message)) ? 'error':'warn', time:i, message:String(message) }));
     (runtime.calls || []).forEach((call, i) => {
       const kind = call.kind || runtimeKind(call.name, call.args);
-      if (kind === 'print' || kind === 'warn' || kind === 'error') return;
-      runtimeEvents.push({ kind, time: i, message: `${call.name || 'runtime'}${call.message ? ` · ${call.message}` : ''}` });
+      if (!visibleKinds.has(kind) || kind === 'print' || kind === 'warn' || kind === 'error') return;
+      raw.push({ kind, time:i, message:call.message || String(call.name || 'Roblox') });
     });
-    const staticEvents = staticPlayEvents(src);
-    const dedupe = new Set();
+    const seen = new Set();
     const feed = [];
-    for (const item of runtimeEvents.concat(staticEvents.map((x, i) => ({ ...x, static: true, time: 10000 + i })))) {
+    for (const item of raw.sort((a,b) => a.time - b.time)) {
       const key = `${item.kind}|${String(item.message).trim()}`;
-      if (dedupe.has(key)) continue;
-      dedupe.add(key);
+      if (seen.has(key)) continue;
+      seen.add(key);
       feed.push(item);
-      if (feed.length >= 300) break;
+      if (feed.length >= 500) break;
     }
-    const counts = { print: 0, ui: 0, event: 0, remote: 0, warn: 0, error: 0 };
+    const counts = { print:0, ui:0, event:0, remote:0, warn:0, error:0, library:0, service:0, network:0, instance:0 };
     feed.forEach(x => { if (counts[x.kind] != null) counts[x.kind]++; });
     const sourceWasRecovered = Boolean(state.recovered);
     $("outCount").textContent = String(feed.length);
     return `<div class="play-shell">
       <div class="play-head">
-        <div><div class="play-title">Roblox Play Output · Qyrex Runtime</div><div class="play-sub">Simula un DataModel de Roblox, servicios, Instances, PlayerGui, eventos y print/warn/error. No abre Roblox ni ejecuta APIs externas.</div></div>
-        <div class="play-badges"><span class="play-badge">PRINT ${counts.print}</span><span class="play-badge">UI ${counts.ui}</span><span class="play-badge">EVENT ${counts.event}</span><span class="play-badge">REMOTE ${counts.remote}</span><span class="play-badge">WARN ${counts.warn}</span><span class="play-badge">ERROR ${counts.error}</span></div>
+        <div><div class="play-title">Roblox Play Output · Qyrex Runtime</div><div class="play-sub">El código recuperado se interpreta en un entorno Roblox simulado: DataModel, Services, Player, PlayerGui, Instances y eventos.</div></div>
+        <div class="play-badges"><span class="play-badge">PRINT ${counts.print}</span><span class="play-badge">UI ${counts.ui}</span><span class="play-badge">EVENT ${counts.event}</span><span class="play-badge">REMOTE ${counts.remote}</span><span class="play-badge">LIB ${counts.library}</span><span class="play-badge">SERVICE ${counts.service}</span><span class="play-badge">WARN ${counts.warn}</span><span class="play-badge">ERROR ${counts.error}</span></div>
       </div>
-      ${sourceWasRecovered ? `<div class="play-note">El Play Output está analizando el código recuperado por Deobfuscate ALL.</div>` : ''}
+      ${sourceWasRecovered ? `<div class="play-note">PLAY está usando únicamente el código final recuperado; las operaciones internas de desofuscación no se muestran aquí.</div>` : ''}
       <div class="play-feed">
-        ${feed.length ? feed.map((x, i) => `<div class="play-line"><span class="play-time">${x.static ? 'SCAN' : `+${String(i).padStart(3,'0')}`}</span><span class="play-kind ${escapeHtml(x.kind)}">${escapeHtml(String(x.kind).toUpperCase())}</span><span class="play-msg">${escapeHtml(x.message)}</span></div>`).join('') : `<div class="play-note">No se detectaron salidas ejecutables o comportamientos reconocibles.</div>`}
+        ${feed.length ? feed.map((x, i) => `<div class="play-line"><span class="play-time">+${String(i).padStart(3,'0')}</span><span class="play-kind ${escapeHtml(x.kind)}">${escapeHtml(String(x.kind).toUpperCase())}</span><span class="play-msg">${escapeHtml(x.message)}</span></div>`).join('') : `<div class="play-note">El script no produjo una salida observable en el entorno simulado.</div>`}
       </div>
-      ${src.trim() ? `<div class="banner"><strong>Reconstructed / Environment Source</strong><br><span class="play-sub">Código que está usando el Runtime después de la recuperación.</span></div><div class="qyrex-codebox"><pre>${escapeHtml(src)}</pre></div>` : ''}
-      <div class="banner"><strong>Roblox Runtime</strong><br>${Number(runtime.calls?.length || 0).toLocaleString()} llamadas · ${Number(runtime.steps || 0).toLocaleString()} pasos · ${stdout.length.toLocaleString()} PRINT · ${stderr.length.toLocaleString()} WARN/ERROR · ${Math.max(0,Number(runtime.tree?.length || 0)-27).toLocaleString()} Instances creadas por el script</div>
+      ${src ? `<div class="banner"><strong>Final Luau / Runtime Source</strong><br><span class="play-sub">Este es el código que recibió el Runtime después de reconstruir las capas.</span></div><div class="qyrex-codebox"><pre>${escapeHtml(src)}</pre></div>` : ''}
+      <div class="banner"><strong>Roblox Environment</strong><br>${Number(runtime.steps || 0).toLocaleString()} pasos · ${stdout.length.toLocaleString()} PRINT · ${stderr.length.toLocaleString()} WARN/ERROR · ${Math.max(0,Number(runtime.tree?.length || 0)-27).toLocaleString()} objetos creados</div>
       ${renderRuntimeTree(runtime.tree)}
     </div>`;
   }
@@ -1986,13 +2070,13 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     }
     function detach(parent,child){if(parent?.__children){const i=parent.__children.indexOf(child);if(i>=0)parent.__children.splice(i,1)}if(child)child.__parent=null;}
     function descendants(o,out=[]){for(const c of (o?.__children||[])){out.push(c);descendants(c,out)}return out}
-    function addTree(o){tree.push({id:o.__id,kind:o.ClassName||o.__kind,name:o.Name||o.name,parent:o.Parent?.Name||o.Parent?.name||'nil',parentId:o.Parent?.__id??null,path:getFullName(o),className:o.ClassName||o.__kind});}
+    function addTree(o){tree.push({obj:o,id:o.__id,kind:o.ClassName||o.__kind,name:o.Name||o.name,parent:'nil',parentId:null,path:getFullName(o),className:o.ClassName||o.__kind});}
     function getFullName(o){if(!o)return 'nil';const parts=[];let cur=o,guard=0;while(cur&&guard++<100){parts.unshift(cur.Name||cur.name||cur.ClassName||cur.__kind);cur=cur.Parent}return parts.join('.')}
     function instanceIsA(o,c){return !!o && (o.ClassName===c || c==='Instance' || (c==='GuiObject' && /Gui|Frame|Label|Button|TextBox|ScrollingFrame|ViewportFrame|UI/.test(o.ClassName||'')) || (c==='PVInstance' && /Part|Mesh|Model|BasePart/.test(o.ClassName||'')));}
     function createInstance(className,name){
       const cls=String(className||'Folder');
       const o={__kind:'Instance',__id:++nextId,ClassName:cls,Name:name||cls,Archivable:true,Visible:/Gui|Frame|Label|Button|TextBox|UI/.test(cls),Parent:null,__children:[]};
-      Object.defineProperty(o,'Parent',{enumerable:true,configurable:true,get(){return o.__parent||null},set(v){if(v===o.__parent)return;if(o.__parent)detach(o.__parent,o);if(v)attach(v,o);call(`${o.Name}.Parent`,[v],v,'instance')}});
+      Object.defineProperty(o,'Parent',{enumerable:true,configurable:true,get(){return o.__parent||null},set(v){if(v===o.__parent)return;if(o.__parent)detach(o.__parent,o);if(v)attach(v,o);call(`${o.Name}.Parent`,[v],v,/Gui|Frame|Label|Button|TextBox|ScrollingFrame|ViewportFrame|SurfaceGui|BillboardGui|UI/.test(o.ClassName)?'ui':'instance')}});
       o.GetFullName=()=>getFullName(o);
       o.GetChildren=()=>o.__children.slice();
       o.GetDescendants=()=>descendants(o,[]);
@@ -2055,7 +2139,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     if(localPlayer){ localPlayer.PlayerScripts=createInstance('PlayerScripts','PlayerScripts'); localPlayer.PlayerScripts.Parent=localPlayer; env.script=createInstance('LocalScript','Script'); env.script.Parent=localPlayer.PlayerScripts; }
     env.task={wait:(n=0)=>{call('task.wait',[n],n,'runtime');return Number(n)||0},spawn:(fn)=>{call('task.spawn',[fn],'<thread>','event');return {__kind:'thread'}},defer:(fn)=>{call('task.defer',[fn],'<thread>','event');return {__kind:'thread'}},delay:(n,fn)=>{call('task.delay',[n,fn],'<thread>','event');return {__kind:'thread'}}};
     env.wait=env.task.wait; env.spawn=env.task.spawn;
-    env.game=DataModel;env.workspace=workspaceRoot;env.Instance={new:c=>{const o=createInstance(String(c));call('Instance.new',[c],o,'instance');return o}};
+    env.game=DataModel;env.workspace=workspaceRoot;env.Instance={new:c=>{const o=createInstance(String(c));call('Instance.new',[c],o,runtimeKind('Instance.new',[c]));return o}};
     function get(name){if(name in env)return env[name];if(name==='game')return DataModel;if(name==='workspace')return workspaceRoot;return null}
     function chain(s){let m=/^([A-Za-z_][\w]*)(.*)$/.exec(s.trim());if(!m)return null;let a=[],r=m[2];while(r){let x=/^\.([A-Za-z_]\w*)/.exec(r);if(x){a.push(x[1]);r=r.slice(x[0].length);continue}x=/^\[([^\]]+)\]/.exec(r);if(x){a.push(x[1].replace(/^['"]|['"]$/g,''));r=r.slice(x[0].length);continue}return null}return{base:m[1],parts:a}}
     function evalx(x){
@@ -2137,7 +2221,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
         if(/^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*|:[A-Za-z_]\w*)?\s*\(/.test(line))evalx(line);
       }
     }
-    const treeSnapshot=()=>tree.map(x=>({...x}));
+    const treeSnapshot=()=>tree.map(x=>({id:x.obj?.__id??x.id,kind:x.obj?.ClassName||x.obj?.__kind||x.kind,name:x.obj?.Name||x.obj?.name||x.name,parent:x.obj?.Parent?.Name||x.obj?.Parent?.name||'nil',parentId:x.obj?.Parent?.__id??null,path:getFullName(x.obj||x),className:x.obj?.ClassName||x.className||x.kind}));
     initializing=false;
     return {run(src){try{run(src)}catch(e){push(stderr,'runtime: '+e.message);call('runtime.error',[e.message],null,'error')}return {stdout,stderr,calls,env,steps,tree:treeSnapshot(),DataModel,services,workspace:workspaceRoot}}};
   }
@@ -2167,17 +2251,19 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
       if (state.controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
 
       const a = analyzeLuraph(src);
-      state.analysis = a;
+      state.originalAnalysis = a;
       state.cleaned = staticFallback(src, a);
       const normalizedOriginal = src.replace(/\s+/g, ' ').trim();
       const normalizedCleaned = state.cleaned.replace(/\s+/g, ' ').trim();
       const recovered = Boolean(normalizedCleaned && normalizedCleaned !== normalizedOriginal);
       state.recovered = recovered;
       const runtimeSource = recovered ? state.cleaned : src;
+      const finalAnalysis = analyzeLuraph(runtimeSource);
+      state.analysis = finalAnalysis;
       const rt = makeSafeRuntime();
       const runtimeResult = rt.run(runtimeSource);
       state.runtime = runtimeResult;
-      state.calls = (a.calls || []).concat((runtimeResult.calls || []).map(c => ({...c, line: c.line || 0})));
+      state.calls = (finalAnalysis.calls || []).concat((runtimeResult.calls || []).map(c => ({...c, line: c.line || 0})));
       state.engine = recovered ? "Qyrex Roblox Runtime · recovered source" : "Qyrex Roblox Runtime · source simulation";
       if (recovered) {
         setCode(state.cleaned);
@@ -2202,14 +2288,16 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
         runtimeSteps: runtimeResult.steps || 0
       };
 
+      log(`Compiled final Luau: ${runtimeSource.length.toLocaleString()} characters`, "out");
       log(`Loaded ${state.fileName} (${a.bytes.toLocaleString()} bytes)`, "sys");
-      log(`Provider: ${a.provider} · ${a.functions.toLocaleString()} functions · ${a.lines.toLocaleString()} lines`, "sys");
+      log(`Provider: ${a.provider} → Runtime source: ${finalAnalysis.provider}`, "sys");
+      log(`Final program: ${finalAnalysis.functions.toLocaleString()} functions · ${finalAnalysis.lines.toLocaleString()} lines`, "sys");
       log(`VM/dumper markers: ${Number(a.dumpers?.vm?.count || 0).toLocaleString()}`, "sys");
       log(`Strings: ${Number(a.dumpers?.strings?.count || 0).toLocaleString()} · decoded: ${Number(a.dumpers?.strings?.decoded?.length || 0).toLocaleString()}`, "out");
       log(`Base64 candidates: ${Number(a.dumpers?.strings?.base64?.length || 0).toLocaleString()} · hex: ${Number(a.dumpers?.strings?.hex?.length || 0).toLocaleString()} · XOR: ${Number(a.dumpers?.strings?.xor?.length || 0).toLocaleString()}`, "out");
       const layerInfo = staticFallback(src, a).split("\n").find(line => line.includes("Recursive decoders:")) || "";
       if (layerInfo) log(layerInfo.replace(/^--\s*/, ""), "out");
-      log(`Calls/behaviors: ${Number(state.calls?.length || a.calls?.length || 0).toLocaleString()} · libraries: ${Number(a.libraries?.length || 0).toLocaleString()} · services: ${Number(a.services?.length || 0).toLocaleString()}`, "out");
+      log(`Final behaviors: ${Number(state.calls?.length || finalAnalysis.calls?.length || 0).toLocaleString()} · libraries: ${Number(finalAnalysis.libraries?.length || 0).toLocaleString()} · services: ${Number(finalAnalysis.services?.length || 0).toLocaleString()}`, "out");
       log(`Safe runtime: ${Number(runtimeResult.calls?.length || 0).toLocaleString()} calls · ${Number(runtimeResult.steps || 0).toLocaleString()} steps · stdout ${Number(runtimeResult.stdout?.length || 0).toLocaleString()}`, "out");
       if (runtimeResult.stdout?.length) runtimeResult.stdout.slice(0,50).forEach(x => log(`[print] ${x}`, "out"));
       if (runtimeResult.stderr?.length) runtimeResult.stderr.slice(0,50).forEach(x => log(`[warn/error] ${x}`, "warn"));
