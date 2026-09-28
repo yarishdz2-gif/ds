@@ -416,6 +416,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 .dumper-card .name{font-weight:800;color:#314158;font-size:10px;text-transform:uppercase;letter-spacing:.05em}
 .dumper-card .value{margin-top:4px;font-size:12px;color:#64748b}
 @media(max-width:900px){.call-summary,.dumper-grid{grid-template-columns:1fr 1fr}.call-line{grid-template-columns:44px 72px 1fr}}
+  .env-tree{border:1px solid #202735;border-radius:12px;background:#0b0f16;padding:8px;max-height:360px;overflow:auto;font-family:JetBrains Mono,monospace}.env-tree-row{display:flex;gap:8px;align-items:center;min-height:28px;color:#d9e2ef;border-bottom:1px solid rgba(255,255,255,.035)}.env-tree-caret{width:14px;color:#6e7d91}.env-tree-name{font-weight:700}.env-tree-class{margin-left:auto;color:#718198;font-size:11px}
 </style>
 </head>
 <body>
@@ -1768,6 +1769,29 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     return events.filter(x => !(x.kind === 'instance' && uiIndexes.has(x.index))).sort((a, b) => a.index - b.index);
   }
 
+  function renderRuntimeTree(tree) {
+    const list = Array.isArray(tree) ? tree : [];
+    if (!list.length) return `<div class="banner"><strong>Roblox Environment</strong><br>No se crearon Instances durante la simulación.</div>`;
+    const byParent = new Map();
+    for (const item of list) {
+      const key = item.parentId == null ? 'root' : String(item.parentId);
+      if (!byParent.has(key)) byParent.set(key, []);
+      byParent.get(key).push(item);
+    }
+    const roots = byParent.get('root') || [];
+    const seen = new Set();
+    const line = (item, depth=0) => {
+      if (!item || seen.has(item.id)) return '';
+      seen.add(item.id);
+      const kids = byParent.get(String(item.id)) || [];
+      return `<div class="env-tree-row" style="padding-left:${Math.min(depth,12)*18}px"><span class="env-tree-caret">${kids.length ? '▾' : '•'}</span><span class="env-tree-name">${escapeHtml(item.name)}</span><span class="env-tree-class">${escapeHtml(item.className)}</span></div>` + kids.map(k => line(k, depth+1)).join('');
+    };
+    let html = `<div class="banner"><strong>Roblox Environment</strong><br><span class="play-sub">DataModel reconstruido durante la ejecución simulada · ${list.length.toLocaleString()} objetos</span></div><div class="env-tree">`;
+    roots.forEach(root => { html += line(root, 0); });
+    for (const item of list) if (!seen.has(item.id)) html += line(item, 0);
+    return html + `</div>`;
+  }
+
   function renderPlayOutput() {
     const src = String(state.cleaned || state.code || '');
     if (!src.trim() && !state.runtime) return `<div class="empty">Listo. Ejecuta <b>Run</b> para simular el script y ver PRINT, UI, eventos y demás salidas.</div>`;
@@ -1798,14 +1822,16 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     $("outCount").textContent = String(feed.length);
     return `<div class="play-shell">
       <div class="play-head">
-        <div><div class="play-title">Roblox Play Output · Safe Simulation</div><div class="play-sub">Detecta y clasifica lo que el script intenta producir; no ejecuta APIs reales de Roblox, red, archivos ni executor.</div></div>
+        <div><div class="play-title">Roblox Play Output · Qyrex Runtime</div><div class="play-sub">Simula un DataModel de Roblox, servicios, Instances, PlayerGui, eventos y print/warn/error. No abre Roblox ni ejecuta APIs externas.</div></div>
         <div class="play-badges"><span class="play-badge">PRINT ${counts.print}</span><span class="play-badge">UI ${counts.ui}</span><span class="play-badge">EVENT ${counts.event}</span><span class="play-badge">REMOTE ${counts.remote}</span><span class="play-badge">WARN ${counts.warn}</span><span class="play-badge">ERROR ${counts.error}</span></div>
       </div>
       ${sourceWasRecovered ? `<div class="play-note">El Play Output está analizando el código recuperado por Deobfuscate ALL.</div>` : ''}
       <div class="play-feed">
         ${feed.length ? feed.map((x, i) => `<div class="play-line"><span class="play-time">${x.static ? 'SCAN' : `+${String(i).padStart(3,'0')}`}</span><span class="play-kind ${escapeHtml(x.kind)}">${escapeHtml(String(x.kind).toUpperCase())}</span><span class="play-msg">${escapeHtml(x.message)}</span></div>`).join('') : `<div class="play-note">No se detectaron salidas ejecutables o comportamientos reconocibles.</div>`}
       </div>
-      <div class="banner"><strong>Runtime</strong><br>${Number(runtime.calls?.length || 0).toLocaleString()} llamadas · ${Number(runtime.steps || 0).toLocaleString()} pasos · ${stdout.length.toLocaleString()} PRINT · ${stderr.length.toLocaleString()} WARN/ERROR</div>
+      ${src.trim() ? `<div class="banner"><strong>Reconstructed / Environment Source</strong><br><span class="play-sub">Código que está usando el Runtime después de la recuperación.</span></div><div class="qyrex-codebox"><pre>${escapeHtml(src)}</pre></div>` : ''}
+      <div class="banner"><strong>Roblox Runtime</strong><br>${Number(runtime.calls?.length || 0).toLocaleString()} llamadas · ${Number(runtime.steps || 0).toLocaleString()} pasos · ${stdout.length.toLocaleString()} PRINT · ${stderr.length.toLocaleString()} WARN/ERROR · ${Math.max(0,Number(runtime.tree?.length || 0)-27).toLocaleString()} Instances creadas por el script</div>
+      ${renderRuntimeTree(runtime.tree)}
     </div>`;
   }
 
@@ -1888,7 +1914,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
       </div>
       ${r.dumperPacks ? `<div class="banner"><strong>Enabled dumper packs</strong><br>${r.dumperPacks.map(x => escapeHtml(x)).join("<br>")}</div>` : ""}
       ${r.stdout || r.stderr ? `<div class="banner"><strong>Runtime stdout / stderr</strong><br><div class="qyrex-codebox"><pre>${escapeHtml((r.stdout || "") + (r.stderr ? "\n" + r.stderr : ""))}</pre></div></div>` : ""}
-      ${r.runtimeCalls != null ? `<div class="banner"><strong>Safe runtime trace</strong><br>${Number(r.runtimeCalls).toLocaleString()} calls · ${Number(r.runtimeSteps || 0).toLocaleString()} steps. Roblox APIs are simulated for tracing; network/filesystem/executor APIs are not exposed.</div>` : ""}`;
+      ${r.runtimeCalls != null ? `<div class="banner"><strong>Safe runtime trace</strong><br>${Number(r.runtimeCalls).toLocaleString()} calls · ${Number(r.runtimeSteps || 0).toLocaleString()} steps. Roblox APIs are simulated locally; no real Roblox client, network, filesystem or executor is launched.</div>` : ""}`;
   }
 
   function renderRight() {
@@ -1929,21 +1955,112 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
   // records observable behavior; it never exposes the target script to JS eval,
   // network, filesystem, or native executor APIs.
   function makeSafeRuntime(){
-    const stdout=[], stderr=[], calls=[], env=Object.create(null); let steps=0;
-    const MAX=12000, MAXLOG=4000;
-    const cut=(v,n=600)=>String(v==null?'nil':v).slice(0,n);
-    const fmt=v=>v&&v.__kind?`<${v.__kind}${v.name?' '+v.name:''}>`:(typeof v==='string'?JSON.stringify(cut(v,300)):String(v==null?'nil':v));
+    const stdout=[], stderr=[], calls=[], env=Object.create(null), tree=[];
+    let steps=0, nextId=0, initializing=true;
+    const MAX=20000, MAXLOG=6000;
+    const cut=(v,n=800)=>String(v==null?'nil':v).slice(0,n);
+    const fmt=v=>v&&v.__kind?`<${v.__kind}${v.Name?' '+v.Name:(v.name?' '+v.name:'')}>`:(typeof v==='string'?cut(v,400):String(v==null?'nil':v));
     const push=(a,v)=>{if(a.length<MAXLOG)a.push(cut(v));};
-    const call=(name,args,result)=>{if(calls.length<MAXLOG)calls.push({line:0,type:'runtime',kind:runtimeKind(name,args),name,args,message:`${name}(${args.map(fmt).join(', ')})`,source:'',result:fmt(result)});};
-    const tick=()=>{if(++steps>MAX)throw Error('Safe runtime instruction limit reached');};
+    const call=(name,args,result,type)=>{if(initializing)return;if(calls.length<MAXLOG)calls.push({line:0,type:type||runtimeKind(name,args),kind:type||runtimeKind(name,args),name,args,message:`${name}(${args.map(fmt).join(', ')})`,source:'',result:fmt(result)});};
+    const tick=()=>{if(++steps>MAX)throw Error('Roblox simulation instruction limit reached');};
     function args(s){let o=[],st=0,d=0,q=null,e=false;for(let i=0;i<s.length;i++){let c=s[i];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"){q=c;continue}if('([{'.includes(c))d++;else if(')]}'.includes(c))d--;else if(c===','&&d===0){o.push(s.slice(st,i).trim());st=i+1}}if(s.slice(st).trim())o.push(s.slice(st).trim());return o}
-    function unquote(s){s=s.trim();if(!((s[0]==='"'&&s.at(-1)==='"')||(s[0]==="'"&&s.at(-1)==="'")))return null;return s.slice(1,-1).replace(/\\x([0-9a-fA-F]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16))).replace(/\\n/g,'\n').replace(/\\r/g,'\r').replace(/\\t/g,'\t').replace(/\\([0-9]{1,3})/g,(_,d)=>String.fromCharCode(+d)).replace(/\\(.)/g,'$1')}
-    function splitOp(s,ops){let d=0,q=null,e=false;for(let i=s.length-1;i>=0;i--){let c=s[i];if(q){if(c==='\\'){i--;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"){q=c;continue}if(')]}'.includes(c))d++;else if('([{'.includes(c))d--;if(d)continue;for(const op of ops){let p=i-op.length+1;if(p>=0&&s.slice(p,i+1)===op)return[p,op]}}return null}
+    function unquote(s){s=s.trim();if(!((s[0]==='"'&&s.at(-1)==='"')||(s[0]==="'"&&s.at(-1)==="'")))return null;return s.slice(1,-1).replace(/\\x([0-9a-fA-F]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16))).replace(/\\u\{([0-9a-fA-F]+)\}/g,(_,h)=>String.fromCodePoint(parseInt(h,16))).replace(/\\n/g,'\n').replace(/\\r/g,'\r').replace(/\\t/g,'\t').replace(/\\([0-9]{1,3})/g,(_,d)=>String.fromCharCode(+d)).replace(/\\(.)/g,'$1')}
+    function splitOp(s,ops){let d=0,q=null;for(let i=s.length-1;i>=0;i--){let c=s[i];if(q){if(c==='\\'){i--;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"){q=c;continue}if(')]}'.includes(c))d++;else if('([{'.includes(c))d--;if(d)continue;for(const op of ops){let p=i-op.length+1;if(p>=0&&s.slice(p,i+1)===op)return[p,op]}}return null}
     function strip(s){s=s.trim();while(s[0]==='('&&s.at(-1)===')'){let d=0,q=null,e=false,ok=true;for(let i=0;i<s.length;i++){let c=s[i];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"){q=c;continue}if(c==='(')d++;else if(c===')'){d--;if(d===0&&i!==s.length-1){ok=false;break}}}if(!ok)break;s=s.slice(1,-1).trim()}return s}
     function truth(v){return v!==false&&v!==null&&v!==undefined}
-    function get(name){if(name in env)return env[name];if(name==='game')return game;if(name==='workspace')return env.workspace;return null}
-    function chain(s){let m=/^([A-Za-z_][\w]*)(.*)$/.exec(s.trim());if(!m)return null;let a=[],r=m[2];while(r){let x=/^\.([A-Za-z_]\w*)/.exec(r);if(x){a.push(x[1]);r=r.slice(x[0].length);continue}x=/^\[([^\]]+)\]/.exec(r);if(x){a.push(fmt(evalx(x[1])));r=r.slice(x[0].length);continue}return null}return{base:m[1],parts:a}}
-    function evalx(x){tick();x=strip(x);let q=unquote(x);if(q!==null)return q;if(x==='true')return true;if(x==='false')return false;if(x==='nil')return null;if(/^[-+]?0x[0-9a-f]+$/i.test(x))return parseInt(x,16);if(/^[-+]?\d+(?:\.\d+)?$/.test(x))return Number(x);
+    function makeSignal(owner,signalName){
+      const handlers=[];
+      return {
+        __kind:'RBXScriptSignal', name:signalName,
+        Connect(fn){handlers.push(fn);call(`${owner.Name||owner.name}:${signalName}:Connect`,[fn],'<Connection>','event');return {__kind:'RBXScriptConnection',Connected:true,Disconnect(){this.Connected=false;call(`${owner.Name||owner.name}:${signalName}:Disconnect`,[],null,'event')}}},
+        Once(fn){handlers.push(fn);call(`${owner.Name||owner.name}:${signalName}:Once`,[fn],'<Connection>','event');return {__kind:'RBXScriptConnection',Connected:true}},
+        Fire(...a){call(`${owner.Name||owner.name}:${signalName}:Fire`,a,null,'event');handlers.length=0},
+        _handlers:handlers
+      };
+    }
+    function attach(parent,child){
+      if(!parent||!child||child===parent)return;
+      if(!Array.isArray(parent.__children))parent.__children=[];
+      if(!parent.__children.includes(child))parent.__children.push(child);
+      child.__parent=parent;
+    }
+    function detach(parent,child){if(parent?.__children){const i=parent.__children.indexOf(child);if(i>=0)parent.__children.splice(i,1)}if(child)child.__parent=null;}
+    function descendants(o,out=[]){for(const c of (o?.__children||[])){out.push(c);descendants(c,out)}return out}
+    function addTree(o){tree.push({id:o.__id,kind:o.ClassName||o.__kind,name:o.Name||o.name,parent:o.Parent?.Name||o.Parent?.name||'nil',parentId:o.Parent?.__id??null,path:getFullName(o),className:o.ClassName||o.__kind});}
+    function getFullName(o){if(!o)return 'nil';const parts=[];let cur=o,guard=0;while(cur&&guard++<100){parts.unshift(cur.Name||cur.name||cur.ClassName||cur.__kind);cur=cur.Parent}return parts.join('.')}
+    function instanceIsA(o,c){return !!o && (o.ClassName===c || c==='Instance' || (c==='GuiObject' && /Gui|Frame|Label|Button|TextBox|ScrollingFrame|ViewportFrame|UI/.test(o.ClassName||'')) || (c==='PVInstance' && /Part|Mesh|Model|BasePart/.test(o.ClassName||'')));}
+    function createInstance(className,name){
+      const cls=String(className||'Folder');
+      const o={__kind:'Instance',__id:++nextId,ClassName:cls,Name:name||cls,Archivable:true,Visible:/Gui|Frame|Label|Button|TextBox|UI/.test(cls),Parent:null,__children:[]};
+      Object.defineProperty(o,'Parent',{enumerable:true,configurable:true,get(){return o.__parent||null},set(v){if(v===o.__parent)return;if(o.__parent)detach(o.__parent,o);if(v)attach(v,o);call(`${o.Name}.Parent`,[v],v,'instance')}});
+      o.GetFullName=()=>getFullName(o);
+      o.GetChildren=()=>o.__children.slice();
+      o.GetDescendants=()=>descendants(o,[]);
+      o.FindFirstChild=(n,recursive=false)=>{const direct=o.__children.find(c=>c.Name===String(n));if(direct||!recursive)return direct||null;return descendants(o,[]).find(c=>c.Name===String(n))||null};
+      o.WaitForChild=(n)=>o.FindFirstChild(n,true)||createInstance('Folder',String(n));
+      o.FindFirstChildWhichIsA=(c,recursive=false)=>{const list=recursive?descendants(o,[]):o.__children;return list.find(x=>instanceIsA(x,String(c)))||null};
+      o.IsA=(c)=>instanceIsA(o,String(c));
+      o.Destroy=()=>{call(`${o.Name}:Destroy`,[],null,'instance');if(o.Parent)detach(o.Parent,o);o.__destroyed=true};
+      o.Clone=()=>{const c=createInstance(o.ClassName,o.Name);c.Archivable=o.Archivable;return c};
+      o.ClearAllChildren=()=>{for(const c of o.__children.slice())c.Destroy();o.__children=[];call(`${o.Name}:ClearAllChildren`,[],null,'instance')};
+      o.SetAttribute=(k,v)=>{if(!o.__attributes)o.__attributes=Object.create(null);o.__attributes[k]=v;call(`${o.Name}:SetAttribute`,[k,v],v,'instance');return v};
+      o.GetAttribute=k=>o.__attributes?.[k];
+      o.GetAttributeChangedSignal=k=>makeSignal(o,`AttributeChanged(${k})`);
+      o.GetPropertyChangedSignal=k=>makeSignal(o,`PropertyChanged(${k})`);
+      o.Changed=makeSignal(o,'Changed');
+      o.AncestryChanged=makeSignal(o,'AncestryChanged');
+      if(/TextLabel|TextButton|TextBox/.test(cls))o.Text='';
+      if(/ImageLabel|ImageButton/.test(cls))o.Image='';
+      if(/Button/.test(cls))o.MouseButton1Click=makeSignal(o,'MouseButton1Click');
+      if(/GuiObject|Frame|Label|Button|TextBox|ScrollingFrame|ViewportFrame|ImageLabel|ImageButton/.test(cls)){
+        o.Position={__kind:'UDim2',X:0,Y:0};o.Size={__kind:'UDim2',X:0,Y:0};o.AnchorPoint={X:0,Y:0};o.BackgroundTransparency=0;o.Visible=true;
+      }
+      if(cls==='ScreenGui'){o.ResetOnSpawn=true;o.Enabled=true}
+      addTree(o); return o;
+    }
+    const DataModel=createInstance('DataModel','game');
+    const serviceNames=['Workspace','Players','ReplicatedStorage','ReplicatedFirst','StarterGui','StarterPlayer','StarterPack','Lighting','RunService','UserInputService','ContextActionService','TweenService','HttpService','SoundService','CoreGui','ServerStorage','ServerScriptService','Teams','Debris','CollectionService'];
+    const services=Object.create(null);
+    function makeService(name){
+      if(services[name])return services[name];
+      const s=createInstance(name==='Workspace'?'Workspace':'Service',name);s.ClassName=name;s.__kind='Service';s.Parent=DataModel;
+      s.GetService=(n)=>makeService(String(n));
+      DataModel[String(name)]=s;
+      s.GetChildren=s.GetChildren.bind(s);
+      s.GetDescendants=s.GetDescendants.bind(s);
+      s.FindFirstChild=s.FindFirstChild.bind(s);
+      s.WaitForChild=s.WaitForChild.bind(s);
+      if(name==='Players'){
+        const player=createInstance('Player','LocalPlayer');player.UserId=1;player.DisplayName='LocalPlayer';player.Parent=s;
+        player.PlayerGui=createInstance('PlayerGui','PlayerGui');player.PlayerGui.Parent=player;
+        player.Backpack=createInstance('Backpack','Backpack');player.Backpack.Parent=player;
+        player.Character=createInstance('Model','Character');player.Character.Parent=workspaceRoot;
+        player.CharacterAdded=makeSignal(player,'CharacterAdded');player.ChildAdded=makeSignal(player,'ChildAdded');
+        s.LocalPlayer=player;s.GetPlayers=()=>[player];s.PlayerAdded=makeSignal(s,'PlayerAdded');s.PlayerRemoving=makeSignal(s,'PlayerRemoving');
+      }
+      if(name==='RunService'){s.Heartbeat=makeSignal(s,'Heartbeat');s.RenderStepped=makeSignal(s,'RenderStepped');s.Stepped=makeSignal(s,'Stepped');s.IsClient=()=>true;s.IsServer=()=>false}
+      if(name==='UserInputService'){s.InputBegan=makeSignal(s,'InputBegan');s.InputEnded=makeSignal(s,'InputEnded');s.InputChanged=makeSignal(s,'InputChanged');s.TouchEnabled=false;s.KeyboardEnabled=true;s.MouseEnabled=true}
+      if(name==='ContextActionService')s.BindAction=(...a)=>{call('ContextActionService:BindAction',a,null,'event');return null};
+      if(name==='TweenService')s.Create=(obj,info,props)=>{call('TweenService:Create',[obj,info,props],'<Tween>','instance');return {__kind:'Tween',Play:()=>call('Tween:Play',[],null,'event'),Cancel:()=>call('Tween:Cancel',[],null,'event')}};
+      if(name==='Debris')s.AddItem=(obj,t)=>call('Debris:AddItem',[obj,t],null,'instance');
+      services[name]=s;env[name]=s;return s;
+    }
+    const workspaceRoot=makeService('Workspace');
+    for(const n of serviceNames)makeService(n);
+    DataModel.GetService=n=>makeService(String(n));
+    DataModel.GetChildren=()=>DataModel.__children.slice();
+    DataModel.GetDescendants=()=>descendants(DataModel,[]);
+    DataModel.FindFirstChild=(n,recursive=false)=>{const d=DataModel.__children.find(c=>c.Name===String(n));if(d||!recursive)return d||null;return descendants(DataModel,[]).find(c=>c.Name===String(n))||null};
+    const localPlayer=services.Players?.LocalPlayer;
+    if(localPlayer){ localPlayer.PlayerScripts=createInstance('PlayerScripts','PlayerScripts'); localPlayer.PlayerScripts.Parent=localPlayer; env.script=createInstance('LocalScript','Script'); env.script.Parent=localPlayer.PlayerScripts; }
+    env.task={wait:(n=0)=>{call('task.wait',[n],n,'runtime');return Number(n)||0},spawn:(fn)=>{call('task.spawn',[fn],'<thread>','event');return {__kind:'thread'}},defer:(fn)=>{call('task.defer',[fn],'<thread>','event');return {__kind:'thread'}},delay:(n,fn)=>{call('task.delay',[n,fn],'<thread>','event');return {__kind:'thread'}}};
+    env.wait=env.task.wait; env.spawn=env.task.spawn;
+    env.game=DataModel;env.workspace=workspaceRoot;env.Instance={new:c=>{const o=createInstance(String(c));call('Instance.new',[c],o,'instance');return o}};
+    function get(name){if(name in env)return env[name];if(name==='game')return DataModel;if(name==='workspace')return workspaceRoot;return null}
+    function chain(s){let m=/^([A-Za-z_][\w]*)(.*)$/.exec(s.trim());if(!m)return null;let a=[],r=m[2];while(r){let x=/^\.([A-Za-z_]\w*)/.exec(r);if(x){a.push(x[1]);r=r.slice(x[0].length);continue}x=/^\[([^\]]+)\]/.exec(r);if(x){a.push(x[1].replace(/^['"]|['"]$/g,''));r=r.slice(x[0].length);continue}return null}return{base:m[1],parts:a}}
+    function evalx(x){
+      tick();x=strip(x);let q=unquote(x);if(q!==null)return q;if(x==='true')return true;if(x==='false')return false;if(x==='nil')return null;
+      if(/^[-+]?0x[0-9a-f]+$/i.test(x))return parseInt(x,16);if(/^[-+]?\d+(?:\.\d+)?$/.test(x))return Number(x);
       if(x.startsWith('not '))return !truth(evalx(x.slice(4)));if(x[0]==='-')return -Number(evalx(x.slice(1)));
       let z=splitOp(x,[' or ']);if(z)return truth(evalx(x.slice(0,z[0])))?evalx(x.slice(0,z[0])):evalx(x.slice(z[0]+z[1].length));
       z=splitOp(x,[' and ']);if(z)return truth(evalx(x.slice(0,z[0])))?evalx(x.slice(z[0]+z[1].length)):evalx(x.slice(0,z[0]));
@@ -1951,38 +2068,78 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
       z=splitOp(x,['..']);if(z)return String(evalx(x.slice(0,z[0])))+String(evalx(x.slice(z[0]+2)));
       z=splitOp(x,['+','-']);if(z)return z[1]==='+'?Number(evalx(x.slice(0,z[0])))+Number(evalx(x.slice(z[0]+1))):Number(evalx(x.slice(0,z[0])))-Number(evalx(x.slice(z[0]+1)));
       z=splitOp(x,['*','/','%']);if(z){let a=Number(evalx(x.slice(0,z[0]))),b=Number(evalx(x.slice(z[0]+1)));return z[1]==='*'?a*b:z[1]==='/'?a/b:a%b}
-      let m=/^(.*?)\(([^]*)\)$/.exec(x);if(m)return invoke(m[1].trim(),args(m[2]).map(evalx));
+      const firstParen=x.indexOf('(');
+      if(firstParen>0){
+        let depth=0,qc=null,esc=false,close=-1;
+        for(let i=firstParen;i<x.length;i++){
+          const ch=x[i];
+          if(qc){if(esc){esc=false;continue}if(ch==='\\'){esc=true;continue}if(ch===qc)qc=null;continue}
+          if(ch==='"'||ch==="'"){qc=ch;continue}
+          if(ch==='(')depth++; else if(ch===')'){depth--;if(depth===0){close=i;break}}
+        }
+        if(close>0){
+          const head=x.slice(0,firstParen).trim();
+          let value=invoke(head,args(x.slice(firstParen+1,close)).map(evalx));
+          let rest=x.slice(close+1).trim();
+          while(rest){
+            let pm=/^\.([A-Za-z_]\w*)/.exec(rest);
+            if(pm){value=value==null?null:value[pm[1]];rest=rest.slice(pm[0].length);continue}
+            let bm=/^\[([^\]]+)\]/.exec(rest);
+            if(bm){value=value==null?null:value[evalx(bm[1])];rest=rest.slice(bm[0].length);continue}
+            let mm=/^:([A-Za-z_]\w*)\(/.exec(rest);
+            if(mm){
+              const pos=rest.indexOf('(');let d2=0,q2=null,e2=false,end2=-1;
+              for(let i=pos;i<rest.length;i++){let ch=rest[i];if(q2){if(e2){e2=false;continue}if(ch==='\\'){e2=true;continue}if(ch===q2)q2=null;continue}if(ch==='"'||ch==="'"){q2=ch;continue}if(ch==='(')d2++;else if(ch===')'){d2--;if(d2===0){end2=i;break}}}
+              if(end2<0)break;
+              const method=mm[1],av=args(rest.slice(pos+1,end2)).map(evalx);value=value&&typeof value[method]==='function'?value[method](...av):null;rest=rest.slice(end2+1);continue;
+            }
+            break;
+          }
+          return value;
+        }
+      }
       if(x[0]==='{'&&x.at(-1)==='}')return{__kind:'table',values:args(x.slice(1,-1)).map(evalx)};
-      let c=chain(x);if(c){let v=get(c.base);for(const p of c.parts)v=v&&v[p];return v}
+      let c=chain(x);if(c){let v=get(c.base);for(const p of c.parts){if(v==null)return null;v=v[p]}return v}
       return get(x);
     }
-    function invoke(name,aa){tick();if(name.includes(':')){let [base,method]=name.split(/:(.+)/),o=evalx(base);if(o&&typeof o[method]==='function')return o[method](...aa)}
-      if(name==='print'){let s=aa.map(fmt).join('\t');push(stdout,s);call(name,aa,null);return null}
-      if(name==='warn'){let s=aa.map(fmt).join('\t');push(stderr,s);call(name,aa,null);return null}
-      if(name==='error'){push(stderr,'error: '+aa.map(fmt).join('\t'));call(name,aa,null);return null}
-      if(name==='require'){let r={__kind:'Module',name:fmt(aa[0])};call(name,aa,r);return r}
-      if(name==='loadstring'||name==='load'){let r={__kind:'function',chunk:typeof aa[0]==='string'?aa[0]:null};call(name,aa,'<captured chunk>');return r}
-      if(name==='getgenv'||name==='getfenv'||name==='getrenv'){call(name,aa,env);return env}
-      let p=name.split('.'),f=get(p[0]);for(let i=1;i<p.length-1;i++)f=f&&f[p[i]];let meth=p.at(-1);if(f&&typeof f[meth]==='function')return f[meth](...aa);if(p.length===1&&f&&f.__kind==='function'&&typeof f.chunk==='string'){call(name,aa,'<executing captured chunk>');run(f.chunk);return null}if(p.length===1&&typeof f==='function')return f(...aa);call(name,aa,null);return null;
+    function invoke(name,aa){
+      tick();
+      if(name.includes(':')){let [base,method]=name.split(/:(.+)/),o=evalx(base);if(o&&typeof o[method]==='function')return o[method](...aa);call(name,aa,null,'runtime');return null}
+      if(name==='print'){const s=aa.map(fmt).join('\t');push(stdout,s);call(name,aa,null,'print');return null}
+      if(name==='warn'){const s=aa.map(fmt).join('\t');push(stderr,s);call(name,aa,null,'warn');return null}
+      if(name==='error'){const s='error: '+aa.map(fmt).join('\t');push(stderr,s);call(name,aa,null,'error');return null}
+      if(name==='require'){let mod={__kind:'ModuleScript',name:fmt(aa[0])};call(name,aa,mod,'library');return mod}
+      if(name==='loadstring'||name==='load'){let r={__kind:'function',chunk:typeof aa[0]==='string'?aa[0]:null};call(name,aa,'<captured chunk>','runtime');return r}
+      if(name==='getgenv'||name==='getfenv'||name==='getrenv'){call(name,aa,env,'environment');return env}
+      let p=name.split('.'),f=get(p[0]);for(let i=1;i<p.length-1;i++)f=f&&f[p[i]];let meth=p.at(-1);
+      if(f&&typeof f[meth]==='function')return f[meth](...aa);
+      if(p.length===1&&f&&f.__kind==='function'&&typeof f.chunk==='string'){call(name,aa,'<executing captured chunk>','runtime');run(f.chunk);return null}
+      if(p.length===1&&typeof f==='function')return f(...aa);
+      call(name,aa,null,'runtime');return null;
     }
-    const game={__kind:'Game',name:'game',GetService:n=>{let key=String(n);if(env[key])return env[key];let r={__kind:'Service',name:key,Name:key};r.Connect=(fn)=>{call(key+':Connect',[fn],null);return {__kind:'Connection',name:key+'.Connection'}};r.FireServer=(...a)=>{call(key+':FireServer',a,null);return null};r.InvokeServer=(...a)=>{call(key+':InvokeServer',a,null);return null};if(key==='Players')r.LocalPlayer={__kind:'Player',name:'LocalPlayer',Name:'LocalPlayer'};env[key]=r;game[key]=r;call('game:GetService',[n],r);return r}};
-    env.game=game;env.workspace={__kind:'Instance',name:'Workspace',ClassName:'Workspace'};
-    env.Instance={new:c=>{let name=String(c),r={__kind:'Instance',name,ClassName:name,Parent:null};r.Connect=(fn)=>{call(name+':Connect',[fn],null);return {__kind:'Connection',name:name+'.Connection'}};r.FireServer=(...a)=>{call(name+':FireServer',a,null);return null};r.InvokeServer=(...a)=>{call(name+':InvokeServer',a,null);return null};r.Destroy=()=>{call(name+':Destroy',[],null)};call('Instance.new',[c],r);return r}};
-    env.string={char:(...a)=>{let r=String.fromCodePoint(...a.map(Number));call('string.char',a,r);return r},byte:(s,a=1,b=a)=>{let out=[];for(let i=Number(a);i<=Number(b);i++)out.push(String(s).charCodeAt(i-1));call('string.byte',[s,a,b],out[0]);return out.length===1?out[0]:out},reverse:s=>String(s).split('').reverse().join(''),rep:(s,n)=>String(s).repeat(Math.max(0,Math.min(100000,Number(n)||0))),sub:(s,a,b)=>String(s).substring(Number(a)-1,b==null?undefined:Number(b))};
-    env.table={concat:(t,sep='')=>(t?.values||[]).map(String).join(String(sep))};
+    env.string={char:(...a)=>{const r=String.fromCodePoint(...a.map(Number));call('string.char',a,r,'runtime');return r},byte:(s,a=1,b=a)=>{let out=[];for(let i=Number(a);i<=Number(b);i++)out.push(String(s).charCodeAt(i-1));return out.length===1?out[0]:out},reverse:s=>String(s).split('').reverse().join(''),rep:(s,n)=>String(s).repeat(Math.max(0,Math.min(100000,Number(n)||0))),sub:(s,a,b)=>String(s).substring(Number(a)-1,b==null?undefined:Number(b))};
+    env.table={concat:(t,sep='')=>(t?.values||[]).map(String).join(String(sep)),insert:(t,v)=>{t?.values?.push(v)}};
+    env.math={floor:Math.floor,ceil:Math.ceil,abs:Math.abs,max:Math.max,min:Math.min,random:()=>0.5};
     env.bit32={bxor:(...a)=>a.reduce((x,y)=>(x^Number(y))>>>0,0),band:(...a)=>a.reduce((x,y)=>(x&Number(y))>>>0,0xffffffff),bor:(...a)=>a.reduce((x,y)=>(x|Number(y))>>>0,0)};
-    const b64decode=s=>{try{let bin=atob(String(s).replace(/[-_]/g,m=>m==='-'?'+':'/'));return bin}catch{return null}};
-    env.base64={decode:s=>{let r=b64decode(s);call('base64.decode',[s],r);return r}};
-    env.crypt={base64decode:s=>{let r=b64decode(s);call('crypt.base64decode',[s],r);return r},xor:(s,k)=>{let z=String(s),key=String(k),o='';for(let i=0;i<z.length;i++)o+=String.fromCharCode(z.charCodeAt(i)^key.charCodeAt(i%Math.max(1,key.length)));call('crypt.xor',[s,k],o);return o}};
-    env.utf8={char:(...a)=>String.fromCodePoint(...a.map(Number))}; env.tonumber=v=>{let n=Number(v);return Number.isFinite(n)?n:null}; env.tostring=fmt; env.type=v=>v&&v.__kind==='table'?'table':typeof v;
-    function run(src,depth=0){if(depth>4)return;let lines=src.replace(/\r/g,'').split('\n');for(let lineNo=0;lineNo<lines.length;lineNo++){tick();let line=lines[lineNo].trim();if(!line||line.startsWith('--'))continue;line=line.replace(/--.*$/,'').trim();
+    const b64decode=s=>{try{return atob(String(s).replace(/-/g,'+').replace(/_/g,'/'))}catch{return null}};
+    env.base64={decode:s=>{const r=b64decode(s);call('base64.decode',[s],r,'runtime');return r}};
+    env.crypt={base64decode:s=>{const r=b64decode(s);call('crypt.base64decode',[s],r,'runtime');return r},xor:(s,k)=>{const z=String(s),key=String(k),o=[];for(let i=0;i<z.length;i++)o.push(String.fromCharCode(z.charCodeAt(i)^key.charCodeAt(i%Math.max(1,key.length))));const r=o.join('');call('crypt.xor',[s,k],r,'runtime');return r}};
+    env.utf8={char:(...a)=>String.fromCodePoint(...a.map(Number))};env.tonumber=v=>{let n=Number(v);return Number.isFinite(n)?n:null};env.tostring=fmt;env.type=v=>v?.__kind==='table'?'table':typeof v;
+    env.Vector2=(x=0,y=0)=>({__kind:'Vector2',X:Number(x),Y:Number(y)});env.Vector3=(x=0,y=0,z=0)=>({__kind:'Vector3',X:Number(x),Y:Number(y),Z:Number(z)});env.Color3={fromRGB:(r,g,b)=>({__kind:'Color3',R:r/255,G:g/255,B:b/255}),new:(r,g,b)=>({__kind:'Color3',R:r,G:g,B:b})};env.UDim2={new:(a,b,c,d)=>({__kind:'UDim2',X:{Scale:a,Offset:b},Y:{Scale:c,Offset:d}})};
+    function run(src,depth=0){
+      if(depth>6)return;const lines=String(src||'').replace(/\r/g,'').split('\n');
+      for(let lineNo=0;lineNo<lines.length;lineNo++){
+        tick();let line=lines[lineNo].trim();if(!line||line.startsWith('--'))continue;line=line.replace(/--.*$/,'').trim();
         let m=/^(?:local\s+)?([A-Za-z_]\w*)\s*=\s*(.+)$/.exec(line);if(m){env[m[1]]=evalx(m[2]);continue}
-        m=/^([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|\[[^\]]+\])*)\s*=\s*(.+)$/.exec(line);if(m){let c=chain(m[1]);let v=evalx(m[2]);if(c&&c.parts.length){let o=get(c.base);for(let i=0;i<c.parts.length-1;i++)o=o&&o[c.parts[i]];if(o)o[c.parts.at(-1)]=v}else env[m[1]]=v;continue}
+        m=/^([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|\[[^\]]+\])*)\s*=\s*(.+)$/.exec(line);if(m){let c=chain(m[1]),v=evalx(m[2]);if(c&&c.parts.length){let o=get(c.base);for(let i=0;i<c.parts.length-1;i++)o=o&&o[c.parts[i]];if(o)o[c.parts.at(-1)]=v}else env[m[1]]=v;continue}
         m=/^return\s+(.+)$/.exec(line);if(m){evalx(m[1]);continue}
         if(/^(?:if|elseif|for|while|repeat|function|local\s+function)\b/.test(line))continue;
         if(/^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*|:[A-Za-z_]\w*)?\s*\(/.test(line))evalx(line);
-      }}
-    return {run(src){try{run(src)}catch(e){stderr.push('runtime: '+e.message)}return {stdout,stderr,calls,env,steps}}};
+      }
+    }
+    const treeSnapshot=()=>tree.map(x=>({...x}));
+    initializing=false;
+    return {run(src){try{run(src)}catch(e){push(stderr,'runtime: '+e.message);call('runtime.error',[e.message],null,'error')}return {stdout,stderr,calls,env,steps,tree:treeSnapshot(),DataModel,services,workspace:workspaceRoot}}};
   }
 
   async function deobfuscate() {
@@ -2021,7 +2178,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
       const runtimeResult = rt.run(runtimeSource);
       state.runtime = runtimeResult;
       state.calls = (a.calls || []).concat((runtimeResult.calls || []).map(c => ({...c, line: c.line || 0})));
-      state.engine = recovered ? "browser-multi-dumper + static recovery" : "browser-multi-dumper + safe-luau-trace";
+      state.engine = recovered ? "Qyrex Roblox Runtime · recovered source" : "Qyrex Roblox Runtime · source simulation";
       if (recovered) {
         setCode(state.cleaned);
         log(`Recovered source: ${state.cleaned.length.toLocaleString()} characters`, "out");
@@ -2037,7 +2194,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
           "25ms / FlameCoder / HookOp / Mimic / Larry / Zala static analyzers",
           "Unveilr / Prometheus / IronBrew / MoonVeil / Luarmor / Junkie signatures",
           "Calls + Environment static dump (library/service/global/file/network metadata)",
-          "Safe Luau trace VM (bounded print/warn/Instance.new/GetService/require/loadstring tracing)"
+          "Roblox Runtime Simulator (bounded Luau + DataModel/Services/Instances/Events/PlayerGui/require/loadstring tracing)"
         ],
         stdout: (runtimeResult.stdout || []).join("\n"),
         stderr: (runtimeResult.stderr || []).join("\n"),

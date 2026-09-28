@@ -1,26 +1,30 @@
-# QyrexDeobf — GitHub Pages (DE TODO)
+# QyrexDeobf — GitHub Pages
 
-Runtime estático para desofuscar scripts Luau/Lua. El objetivo es que **el resultado final sea código limpio**, no wrappers a medias.
+Desofuscador y simulador de entorno Luau/Roblox para navegador.
 
-## Qué desofusca
-- Base64 / URL-safe Base64 (recursivo, multi-capa)
-- XOR (clave de 1 byte y multi-byte descubierta)
-- Hex, decimal-bytes, octal, URL percent-encoding, reverse
-- `string.char` / `utf8.char` / `table.concat` folding
-- Wrappers `loadstring` / `load`
-- Decoders custom tipo `base64decode` + alfabeto + payload
-- Detección Luraph / Prometheus / IronBrew y patrones de VM
-- Multi-pass hasta estabilizar: si hay capas, las aplica hasta el payload
+## Ahora incluye
 
-## Uso GitHub Pages
-1. Sube el contenido de esta carpeta a la raíz del repo
-2. Settings → Pages → Deploy from a branch → `/ (root)`
-3. Abre la URL, pega el script ofuscado y desofusca
+- Recuperación multi-capa de Base64, XOR, Hex, bytes, `string.char`, `utf8.char`, `table.concat`, `loadstring` y otros wrappers estáticos.
+- Output tipo Roblox para `print`, `warn`, `error`, UI, Instances, eventos, remotes y llamadas de servicios.
+- DataModel simulado con `game`, `workspace`, servicios comunes, `Players`, `LocalPlayer`, `PlayerGui`, `Backpack` y `PlayerScripts`.
+- `Instance.new`, `Parent`, `Name`, `ClassName`, `GetChildren`, `GetDescendants`, `FindFirstChild`, `WaitForChild`, `IsA`, `Destroy`, `Clone`, atributos y señales básicas.
+- Reconstrucción visual de la jerarquía creada por el script.
+- El código recuperado se muestra directamente como fuente de entorno y es el código que analiza el Runtime.
 
-También puedes abrir `index.html` en el navegador sin servidor.
+## Importante
+
+Esto no arranca el cliente real de Roblox ni ejecuta un juego de Roblox. Es un Runtime local acotado que reproduce una superficie de APIs de Roblox para reconstrucción, trazado y análisis dentro del navegador.
+
+## Uso en GitHub Pages
+
+1. Sube el contenido de esta carpeta al repositorio.
+2. Ve a Settings → Pages.
+3. Selecciona Deploy from a branch y la raíz `/ (root)`.
+4. Abre la página, pega el Luau y pulsa `Run` o `Deobfuscate ALL`.
 
 ## Archivos
-- `index.html` — UI + motor embebido
-- `lib/browser-analyzer.js` — misma lógica
-- `.nojekyll` — GitHub Pages
-- `README.md` — este archivo
+
+- `index.html` — interfaz, recuperador y Runtime Roblox simulado.
+- `lib/browser-analyzer.js` — analizador estático multi-capa.
+- `.nojekyll` — configuración para GitHub Pages.
+- `README.md` — documentación.
