@@ -312,6 +312,21 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 .log-type.warn{color:#aa8024}
 .log-type.err{color:#c55757}
 .log-msg{color:#4e5f73}
+.play-shell{display:flex;flex-direction:column;gap:10px}
+.play-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;border:1px solid #dfe8f2;border-radius:9px;background:#f7fafe}
+.play-title{font:800 12px var(--sans);color:#27415f;letter-spacing:.02em}
+.play-sub{font:10px var(--sans);color:#718095;margin-top:2px}
+.play-badges{display:flex;flex-wrap:wrap;gap:6px}
+.play-badge{padding:4px 7px;border:1px solid #dfe8f2;border-radius:999px;background:#fff;font:800 9px var(--mono);color:#566b82}
+.play-feed{border:1px solid #dfe8f2;border-radius:9px;background:#fbfdff;overflow:hidden}
+.play-line{display:grid;grid-template-columns:58px 62px 1fr;gap:8px;align-items:start;padding:8px 10px;border-bottom:1px solid #edf1f5;font:10px var(--mono);line-height:1.45}
+.play-line:last-child{border-bottom:0}
+.play-time{color:#98a6b5;text-align:right}
+.play-kind{font-weight:900;letter-spacing:.05em}
+.play-kind.print{color:#24936d}.play-kind.ui{color:#6b57c9}.play-kind.event{color:#2e78bb}.play-kind.remote{color:#b06a1e}.play-kind.warn{color:#aa8024}.play-kind.error{color:#c55757}.play-kind.service{color:#54708d}.play-kind.network{color:#a34f8f}.play-kind.instance{color:#5f748e}.play-kind.runtime{color:#6b7786}
+.play-msg{color:#354a61;white-space:pre-wrap;word-break:break-word}
+.play-section{padding:10px 12px 0;font:800 10px var(--sans);color:#4e6785}
+.play-note{padding:10px 12px;font:10px var(--sans);color:#718095}
 .result{
   border:1px solid var(--border);
   border-radius:8px;
@@ -1585,7 +1600,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     calls: [],
     report: null,
     runtime: null,
-    engine: "static"
+    engine: "static",
+    recovered: false
   };
 
   function nowStamp() {
@@ -1702,6 +1718,97 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     return window.QyrexBrowserAnalyzer.cleanSource(src);
   }
 
+  function runtimeKind(name, args = []) {
+    const n = String(name || '').toLowerCase();
+    if (n === 'print') return 'print';
+    if (n === 'warn') return 'warn';
+    if (n === 'error') return 'error';
+    if (n === 'instances.new' || n === 'instance.new') {
+      const cls = String(args?.[0] ?? '').replace(/^['"]|['"]$/g, '');
+      return /(?:gui|frame|label|button|textbox|scrollingframe|viewportframe|surfacegui|billboardgui|uistroke|uicorner|ui\w+)/i.test(cls) ? 'ui' : 'instance';
+    }
+    if (/fireserver|invokeserver|onclientevent|onclientinvoke|onserverevent|onserverinvoke/i.test(n)) return 'remote';
+    if (/connect$|\.connect$|mousebutton|inputbegan|inputended|inputchanged/i.test(n)) return 'event';
+    if (/getservice/.test(n)) return 'service';
+    if (/httpget|requestasync|http_request|syn\.request|websocket/.test(n)) return 'network';
+    if (/loadstring|\bload$/.test(n)) return 'runtime';
+    return 'runtime';
+  }
+
+  function staticPlayEvents(src) {
+    const text = String(src || '');
+    const events = [];
+    const push = (kind, index, message) => events.push({ kind, index: Number.isFinite(index) ? index : 0, message });
+    let m;
+    const patterns = [
+      ['print', /\bprint\s*\(/gi, 'PRINT detectado'],
+      ['warn', /\bwarn\s*\(/gi, 'WARN detectado'],
+      ['error', /\berror\s*\(/gi, 'ERROR detectado'],
+      ['ui', /\bInstance\s*\.\s*new\s*\(\s*[\"\'](ScreenGui|Frame|TextLabel|TextButton|TextBox|ImageLabel|ImageButton|ScrollingFrame|ViewportFrame|SurfaceGui|BillboardGui|UIStroke|UICorner|UIListLayout|UIGridLayout|UIPadding|UIScale)[\"\']/gi, 'UI detectada: $1'],
+      ['ui', /\b(?:CreateWindow|CreateTab|CreateSection|CreateButton|CreateToggle|CreateSlider|CreateLabel|AddTab|AddButton)\s*\(/gi, 'UI/library detectada'],
+      ['event', /(?:\.|:)Connect\s*\(/gi, 'Evento Connect detectado'],
+      ['event', /\b(?:MouseButton1Click|MouseButton2Click|InputBegan|InputEnded|InputChanged)\b/gi, 'Evento de entrada detectado'],
+      ['remote', /:(?:FireServer|InvokeServer)\s*\(/gi, 'Remote detectado'],
+      ['remote', /\.OnClient(?:Event|Invoke)\s*(?:=|\()/gi, 'Callback remoto detectado'],
+      ['service', /\bgame\s*:\s*GetService\s*\(/gi, 'GetService detectado'],
+      ['network', /\b(?:HttpGet|RequestAsync|http_request|request|syn\.request|WebSocket)\s*\(/gi, 'Network/API detectada'],
+      ['runtime', /\bloadstring\s*\(/gi, 'Carga dinámica detectada'],
+      ['instance', /\bInstance\s*\.\s*new\s*\(/gi, 'Instance.new detectado'],
+      ['ui', /\.(?:Parent|Visible|Text|TextSize|TextColor3|BackgroundColor3|BackgroundTransparency|Image|ImageTransparency|Size|Position|AnchorPoint)\s*=\s*/gi, 'Propiedad UI detectada']
+    ];
+    for (const [kind, re, label] of patterns) {
+      re.lastIndex = 0;
+      while ((m = re.exec(text))) {
+        push(kind, m.index, label.includes('$1') ? label.replace('$1', m[1]) : label);
+        if (events.length >= 500) break;
+      }
+      if (events.length >= 500) break;
+    }
+    const uiIndexes = new Set(events.filter(x => x.kind === 'ui').map(x => x.index));
+    return events.filter(x => !(x.kind === 'instance' && uiIndexes.has(x.index))).sort((a, b) => a.index - b.index);
+  }
+
+  function renderPlayOutput() {
+    const src = String(state.cleaned || state.code || '');
+    if (!src.trim() && !state.runtime) return `<div class="empty">Listo. Ejecuta <b>Run</b> para simular el script y ver PRINT, UI, eventos y demás salidas.</div>`;
+    const runtime = state.runtime || { stdout: [], stderr: [], calls: [], steps: 0 };
+    const runtimeEvents = [];
+    const stdout = Array.isArray(runtime.stdout) ? runtime.stdout : [];
+    const stderr = Array.isArray(runtime.stderr) ? runtime.stderr : [];
+    stdout.forEach((message, i) => runtimeEvents.push({ kind: 'print', time: i, message: String(message) }));
+    stderr.forEach((message, i) => runtimeEvents.push({ kind: /error:/i.test(String(message)) ? 'error' : 'warn', time: i, message: String(message) }));
+    (runtime.calls || []).forEach((call, i) => {
+      const kind = call.kind || runtimeKind(call.name, call.args);
+      if (kind === 'print' || kind === 'warn' || kind === 'error') return;
+      runtimeEvents.push({ kind, time: i, message: `${call.name || 'runtime'}${call.message ? ` · ${call.message}` : ''}` });
+    });
+    const staticEvents = staticPlayEvents(src);
+    const dedupe = new Set();
+    const feed = [];
+    for (const item of runtimeEvents.concat(staticEvents.map((x, i) => ({ ...x, static: true, time: 10000 + i })))) {
+      const key = `${item.kind}|${String(item.message).trim()}`;
+      if (dedupe.has(key)) continue;
+      dedupe.add(key);
+      feed.push(item);
+      if (feed.length >= 300) break;
+    }
+    const counts = { print: 0, ui: 0, event: 0, remote: 0, warn: 0, error: 0 };
+    feed.forEach(x => { if (counts[x.kind] != null) counts[x.kind]++; });
+    const sourceWasRecovered = Boolean(state.recovered);
+    $("outCount").textContent = String(feed.length);
+    return `<div class="play-shell">
+      <div class="play-head">
+        <div><div class="play-title">Roblox Play Output · Safe Simulation</div><div class="play-sub">Detecta y clasifica lo que el script intenta producir; no ejecuta APIs reales de Roblox, red, archivos ni executor.</div></div>
+        <div class="play-badges"><span class="play-badge">PRINT ${counts.print}</span><span class="play-badge">UI ${counts.ui}</span><span class="play-badge">EVENT ${counts.event}</span><span class="play-badge">REMOTE ${counts.remote}</span><span class="play-badge">WARN ${counts.warn}</span><span class="play-badge">ERROR ${counts.error}</span></div>
+      </div>
+      ${sourceWasRecovered ? `<div class="play-note">El Play Output está analizando el código recuperado por Deobfuscate ALL.</div>` : ''}
+      <div class="play-feed">
+        ${feed.length ? feed.map((x, i) => `<div class="play-line"><span class="play-time">${x.static ? 'SCAN' : `+${String(i).padStart(3,'0')}`}</span><span class="play-kind ${escapeHtml(x.kind)}">${escapeHtml(String(x.kind).toUpperCase())}</span><span class="play-msg">${escapeHtml(x.message)}</span></div>`).join('') : `<div class="play-note">No se detectaron salidas ejecutables o comportamientos reconocibles.</div>`}
+      </div>
+      <div class="banner"><strong>Runtime</strong><br>${Number(runtime.calls?.length || 0).toLocaleString()} llamadas · ${Number(runtime.steps || 0).toLocaleString()} pasos · ${stdout.length.toLocaleString()} PRINT · ${stderr.length.toLocaleString()} WARN/ERROR</div>
+    </div>`;
+  }
+
   function renderLogs() {
     if (!state.logs.length) {
       return `<div class="empty">Listo. Abre o pega un script y pulsa <b>Run</b> o <b>Deobfuscate ALL</b>.</div>`;
@@ -1787,7 +1894,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
   function renderRight() {
     const box = $("rightContent");
     if (state.currentRight === "output") {
-      box.innerHTML = `<div class="banner"><strong>QyrexDeobf</strong><br>Pipeline: trace → dumpers → deobfuscation → behavior/call analysis. Run uses Qyrex Safe Luau Trace VM with a simulated Roblox surface; it is not a live Roblox/executor environment.</div><div id="logArea">${renderLogs()}</div>`;
+      box.innerHTML = renderPlayOutput();
     } else if (state.currentRight === "calls") {
       box.innerHTML = renderCalls();
     } else if (state.currentRight === "report") {
@@ -1827,7 +1934,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     const cut=(v,n=600)=>String(v==null?'nil':v).slice(0,n);
     const fmt=v=>v&&v.__kind?`<${v.__kind}${v.name?' '+v.name:''}>`:(typeof v==='string'?JSON.stringify(cut(v,300)):String(v==null?'nil':v));
     const push=(a,v)=>{if(a.length<MAXLOG)a.push(cut(v));};
-    const call=(name,args,result)=>{if(calls.length<MAXLOG)calls.push({line:0,type:'runtime',name,message:`${name}(${args.map(fmt).join(', ')})`,source:'',result:fmt(result)});};
+    const call=(name,args,result)=>{if(calls.length<MAXLOG)calls.push({line:0,type:'runtime',kind:runtimeKind(name,args),name,args,message:`${name}(${args.map(fmt).join(', ')})`,source:'',result:fmt(result)});};
     const tick=()=>{if(++steps>MAX)throw Error('Safe runtime instruction limit reached');};
     function args(s){let o=[],st=0,d=0,q=null,e=false;for(let i=0;i<s.length;i++){let c=s[i];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"){q=c;continue}if('([{'.includes(c))d++;else if(')]}'.includes(c))d--;else if(c===','&&d===0){o.push(s.slice(st,i).trim());st=i+1}}if(s.slice(st).trim())o.push(s.slice(st).trim());return o}
     function unquote(s){s=s.trim();if(!((s[0]==='"'&&s.at(-1)==='"')||(s[0]==="'"&&s.at(-1)==="'")))return null;return s.slice(1,-1).replace(/\\x([0-9a-fA-F]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16))).replace(/\\n/g,'\n').replace(/\\r/g,'\r').replace(/\\t/g,'\t').replace(/\\([0-9]{1,3})/g,(_,d)=>String.fromCharCode(+d)).replace(/\\(.)/g,'$1')}
@@ -1902,17 +2009,18 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
       await new Promise(resolve => setTimeout(resolve, 0));
       if (state.controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
 
-      const rt = makeSafeRuntime();
-      const runtimeResult = rt.run(src);
-      state.runtime = runtimeResult;
-
       const a = analyzeLuraph(src);
       state.analysis = a;
-      state.calls = (a.calls || []).concat((runtimeResult.calls || []).map(c => ({...c, line: c.line || 0})));
       state.cleaned = staticFallback(src, a);
       const normalizedOriginal = src.replace(/\s+/g, ' ').trim();
       const normalizedCleaned = state.cleaned.replace(/\s+/g, ' ').trim();
-      const recovered = normalizedCleaned && normalizedCleaned !== normalizedOriginal;
+      const recovered = Boolean(normalizedCleaned && normalizedCleaned !== normalizedOriginal);
+      state.recovered = recovered;
+      const runtimeSource = recovered ? state.cleaned : src;
+      const rt = makeSafeRuntime();
+      const runtimeResult = rt.run(runtimeSource);
+      state.runtime = runtimeResult;
+      state.calls = (a.calls || []).concat((runtimeResult.calls || []).map(c => ({...c, line: c.line || 0})));
       state.engine = recovered ? "browser-multi-dumper + static recovery" : "browser-multi-dumper + safe-luau-trace";
       if (recovered) {
         setCode(state.cleaned);
@@ -1949,8 +2057,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
       if (runtimeResult.stdout?.length) runtimeResult.stdout.slice(0,50).forEach(x => log(`[print] ${x}`, "out"));
       if (runtimeResult.stderr?.length) runtimeResult.stderr.slice(0,50).forEach(x => log(`[warn/error] ${x}`, "warn"));
       log(recovered ? "Deobfuscation finished: recovered code loaded into the editor." : "Deobfuscation finished: no additional static layer was recoverable.", recovered ? "out" : "warn");
-      switchRight("environment");
-      toast("QyrexDeobf", recovered ? "Código desofuscado cargado en el editor." : "No se encontró una capa estática adicional; se conservó el código original.");
+      switchRight("output");
+      toast("QyrexDeobf", recovered ? "Código desofuscado cargado en el editor y enviado al Play Output." : "Código analizado y enviado al Play Output.");
       setStatus(recovered ? "Deobfuscated" : "Completed", recovered ? "success" : "warn");
     } catch (error) {
       if (error?.name === "AbortError") {
@@ -1960,7 +2068,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
         log(`Local analyzer failed: ${error?.message || error}`, "err");
         state.cleaned = staticFallback(src, state.analysis || {});
         state.engine = "browser-static-fallback";
-        switchRight("environment");
+        switchRight("output");
         setStatus("Fallback", "warn");
       }
     } finally {
@@ -2022,6 +2130,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
   function newFile() {
     state.fileName = "untitled-obfuscated.lua";
     state.cleaned = "";
+    state.recovered = false;
     state.logs = [];
     state.calls = [];
     state.report = null;
@@ -2036,6 +2145,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     state.logs = [];
     state.calls = [];
     state.runtime = null;
+    state.recovered = false;
     $("outCount").textContent = "0";
     $("behaviorCount").textContent = "0";
     $("vmCount").textContent = "0";
