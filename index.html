@@ -1706,6 +1706,12 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
       ['Python',/(?:__builtins__\.|lambda\s+[^:]+:|\bdef\s+\w+\s*\()/i],
       ['77fuscator',/\b77fuscator\b|77FUS\|[0-9A-Z]+/i],
       ['Luraph',/This file was protected using Luraph Obfuscator|(?:\bCALL\b.*\bCHECKIF\b.*\bCHECKWHILE\b)|\.YA\s*\(\s*\)/is],
+      ['Monsec',/\b(?:Monsec|MSEC|MSecAntiTamper|MSec)\b/i],
+      ['IronBrew',/\bIronBrew(?:2)?\b|\bIronBrew2\b/i],
+      ['MoonVeil',/\bMoonVeil\b/i],
+      ['Luarmor',/\bLuarmor\b/i],
+      ['Prometheus',/\bPrometheus\b|\bPrometheus\.lua\b/i],
+      ['77fuscator',/\b77FUS\|/i],
       ['FlameCoder/FlameDumper',/\b(?:Universal Reader|_HOOKOP|CODER_CALL)\b/i],
       ['25ms',/(?:__25mslocation|<25ms_concat_me>|@25msrequireluvsu)/i],
       ['Unveilr',/\b(?:ExpressionHooks|hookOpValue|ExecEnv)\b/i],
@@ -2254,6 +2260,204 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
       shape: vmMarkers ? "VM / multi-pass candidate" : "Static source"
     });
   }
+
+
+  // Universal browser reconstruction pipeline.
+  // Safe: it only evaluates bounded constant expressions and decoding transforms;
+  // it never executes arbitrary user source or Python/Lua bytecode.
+  function universalScoreSource(src) {
+    const s = String(src || '').trim();
+    if (!s) return -1e9;
+    let score = 0;
+    const lo = s.toLowerCase();
+    if (/(?:\bprint\s*\(|\bwarn\s*\(|\breturn\b|\blocal\b|\bfunction\b|\bif\b[\s\S]*\bthen\b)/i.test(s)) score += 30;
+    if (/^\s*(?:--[^\n]*\n\s*)*(?:local|function|return|if|for|while|repeat|print|warn|game[.:]|Instance\s*\.)/i.test(s)) score += 18;
+    if (/\b(?:game\s*[:.]\s*getservice|workspace\b|instance\s*\.\s*new|players\b|playergui\b)/i.test(s)) score += 30;
+    if (s.split('\n').length <= 80) score += 8;
+    if (/\b(?:screenGui|frame|textlabel|textbutton|uistroke|uicorner)\b/i.test(s)) score += 25;
+    if (/\b(?:loadstring|load|decode|decrypt|base64|xor|bit32|string\.char|string\.byte|proto|dispatch|handler)\b/i.test(s)) score -= 22;
+    if (/\b(?:proto|dispatch|handler|opcode|virtual|vmstate|vm\b)\b/i.test(s)) score -= 10;
+    if (/\b(?:import|from\s+\w+\s+import|def\s+\w+\s*\(|__builtins__)\b/i.test(s)) score -= 8;
+    score += Math.min(24, Math.log10(Math.max(1, s.length)) * 5);
+    score -= Math.min(60, s.length / 10000);
+    return score;
+  }
+
+  function rawByteDecodeString(text, transform) {
+    const bytes = [];
+    const str = String(text || '');
+    for (let i = 0; i < str.length; i++) bytes.push(str.charCodeAt(i) & 255);
+    const out = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) out[i] = transform(bytes[i], i) & 255;
+    return bytesToLatin1(out);
+  }
+
+  function bruteSingleByteXor(text, limit = 300000) {
+    const src = String(text || '');
+    if (!src || src.length > limit) return [];
+    const results = [];
+    const bytes = new Uint8Array(src.length);
+    for (let i = 0; i < src.length; i++) bytes[i] = src.charCodeAt(i) & 255;
+    for (let key = 0; key < 256; key++) {
+      let printable = 0;
+      for (let i = 0; i < bytes.length; i++) {
+        const c = bytes[i] ^ key;
+        if (c === 9 || c === 10 || c === 13 || (c >= 32 && c <= 126)) printable++;
+      }
+      if (bytes.length && printable / bytes.length < 0.78) continue;
+      const out = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) out[i] = bytes[i] ^ key;
+      const decoded = bytesToLatin1(out);
+      const score = universalScoreSource(decoded);
+      if (score >= 35) results.push({key, value:decoded, score});
+    }
+    return results.sort((a,b) => b.score-a.score).slice(0, 8);
+  }
+
+  function decodeGenericByteList(src) {
+    const out = [];
+    const text = String(src || '');
+    const patterns = [
+      /\b(?:string\.(?:char|frombytecode)|utf8\.char)\s*\(\s*\{([\d\s,]+)\}\s*\)/gi,
+      /\bbytes\s*\(\s*\[([\d\s,]+)\]\s*\)/gi,
+      /\b(?:data|blob|payload|bytes)\s*=\s*\[([\d\s,]+)\]/gi
+    ];
+    for (const re of patterns) {
+      let m;
+      while ((m = re.exec(text))) {
+        const nums = m[1].split(/\s*,\s*/).filter(Boolean).map(Number);
+        if (!nums.length || nums.length > 500000 || nums.some(n => !Number.isInteger(n) || n < 0 || n > 255)) continue;
+        const value = String.fromCharCode(...nums.slice(0, 250000));
+        if (value) out.push(value);
+      }
+    }
+    return out;
+  }
+
+  function reducePythonUniversal(src) {
+    let out = String(src || '').trim();
+    const layers = [];
+    for (let pass = 0; pass < 64; pass++) {
+      const before = out;
+      try {
+        const r = window.QyrexBrowserAnalyzer.reducePythonStatic(out);
+        if (r?.source && r.source !== out) { out = String(r.source).trim(); layers.push(...(r.layers || [])); }
+      } catch (_) {}
+      // Base64 strings in Python wrappers: base64.b64decode('...').decode()/decode('utf-8')
+      out = out.replace(/\bbase64\.(?:b64decode|urlsafe_b64decode)\(\s*(["'])([A-Za-z0-9+/_=\-\s]{8,})\1\s*\)(?:\.decode\(\s*["'][^"']*["']\s*\)|\.decode\(\s*\))?/gi, (full, q, body) => {
+        const b = decodeBase64(body.replace(/\s+/g,''));
+        if (!b) return full;
+        layers.push('python base64'); return JSON.stringify(b);
+      });
+      // bytearray/list comprehension style XOR with a constant key.
+      out = out.replace(/\b(?:bytes|bytearray)\(\s*\[\s*([0-9\s,]+)\s*\]\s*\)\.decode\(\s*(?:["'][^"']*["']\s*)?\)/gi, (full, nums) => {
+        const values = nums.split(/\s*,\s*/).filter(Boolean).map(Number);
+        if (!values.length || values.some(n => !Number.isInteger(n) || n < 0 || n > 255)) return full;
+        layers.push('python bytes literal'); return JSON.stringify(String.fromCharCode(...values));
+      });
+      // ''.join(chr(...)) and ''.join(chr(x ^ K) for x in [...]) forms.
+      out = out.replace(/(["'])\1\.join\(\s*chr\(\s*x\s*\^\s*(\d+)\s*\)\s+for\s+x\s+in\s+\[\s*([0-9\s,]+)\s*\]\s*\)/gi, (full, _q, key, nums) => {
+        const k=Number(key)&255, values=nums.split(/\s*,\s*/).filter(Boolean).map(Number);
+        if(!values.length || values.some(n=>!Number.isInteger(n)||n<0||n>255)) return full;
+        layers.push(`python chr generator xor ${k}`); return JSON.stringify(String.fromCharCode(...values.map(n=>n^k)));
+      });
+      // User-style compact Python wrapper: bytes(map(lambda x:x ^ K, [...]).decode())
+      // is not valid Python because decode() is attached to map(), but it is a common
+      // obfuscator typo/wrapper shape. Recover the byte transformation anyway.
+      out = out.replace(/bytes\(\s*map\(\s*lambda\s+([A-Za-z_]\w*)\s*:\s*\1\s*\^\s*(\d+)\s*,\s*\[\s*([0-9\s,]+)\s*\]\s*\)\s*\.decode\(\s*\)\s*\)/g,
+        (full, _v, key, nums) => {
+          const k=Number(key)&255, values=nums.split(/\s*,\s*/).filter(Boolean).map(Number);
+          if(!values.length || values.some(n=>!Number.isInteger(n)||n<0||n>255)) return full;
+          layers.push(`python map xor typo ${k}`); return JSON.stringify(String.fromCharCode(...values.map(n=>n^k)));
+        });
+      // Generic constant XOR map over a list.
+      out = out.replace(/(?:bytes|bytearray)\(\s*map\(\s*lambda\s+([A-Za-z_]\w*)\s*:\s*\1\s*\^\s*(0x[0-9a-fA-F]+|\d+)\s*,\s*\[\s*([0-9\s,]+)\s*\]\s*\)\s*\)\s*\.decode\(\s*(?:["'][^"']*["']\s*)?\)/g,
+        (full, _v, keyRaw, nums) => {
+          const k=Number(keyRaw)&255, values=nums.split(/\s*,\s*/).filter(Boolean).map(Number);
+          if(!values.length || values.some(n=>!Number.isInteger(n)||n<0||n>255)) return full;
+          layers.push(`python bytes/map xor generic ${k}`); return JSON.stringify(String.fromCharCode(...values.map(n=>n^k)));
+        });
+
+      // reverse bytes literals / strings.
+      out = out.replace(/(?:["'])([^"']{4,})(?:["'])\.\s*\[::-1\]/g, (full, body) => { layers.push('python reverse'); return JSON.stringify(body.split('').reverse().join('')); });
+      if (out === before) break;
+    }
+    return {source:out, changed:out !== String(src||'').trim(), layers};
+  }
+
+  function universalRecover(src, analysis) {
+    const original = String(src || '').replace(/^\uFEFF/, '').replace(/\r\n?/g,'\n').trim();
+    if (!original) return {source:'', recovered:false, score:-1e9, layers:[], language:'unknown'};
+    const language = window.QyrexBrowserAnalyzer.detectSourceLanguage(original);
+    const maxInput = Math.min(25000000, Math.max(original.length, 1));
+    const seen = new Map();
+    const queue = [{value:original, method:'original', depth:0}];
+    let best = {source:original, score:universalScoreSource(original), method:'original'};
+    const layers = [];
+    const add = (value, method, depth) => {
+      let v = String(value || '').trim();
+      if (!v || v.length > maxInput || v === original) return;
+      // Normalize only harmless outer noise here; don't delete unknown program text.
+      if (/^\[[\s\S]*\]$/.test(v) && v.length > 50 && !/\b(?:local|function|return|print|game|Instance)\b/i.test(v)) return;
+      const key = v.slice(0,2000) + '\u0000' + v.length;
+      if (seen.has(key) && seen.get(key) <= depth) return;
+      seen.set(key, depth);
+      queue.push({value:v,method,depth});
+      const score = universalScoreSource(v);
+      const isFinal = isLikelyFinalProgram(v);
+      const compactWin = isFinal && v.length < best.source.length * 0.70 && !/\b(?:loadstring|load|decode|decrypt|base64|xor|PROTO|DISPATCH|HANDLER)\b/i.test(v);
+      if (compactWin || score > best.score + 0.5 || (score > best.score && v.length < best.source.length*0.65)) best = {source:v,score,method};
+    };
+
+    for (let depth = 0; depth < 32 && queue.length; depth++) {
+      const batch = queue.splice(0, Math.min(queue.length, 32));
+      for (const item of batch) {
+        const cur = item.value;
+        try { add(window.QyrexBrowserAnalyzer.cleanSource(cur),'clean-source',item.depth+1); } catch (_) {}
+        try { add(window.QyrexBrowserAnalyzer.foldStaticConstants(cur),'constant-fold',item.depth+1); } catch (_) {}
+        try { add(window.QyrexBrowserAnalyzer.recoverStaticBuilderLoops(cur),'builder-loop',item.depth+1); } catch (_) {}
+        try { add(window.QyrexBrowserAnalyzer.foldPureCalls(cur),'pure-call-fold',item.depth+1); } catch (_) {}
+        try { add(window.QyrexBrowserAnalyzer.decodeAllLayers(cur).source,'recursive-decode',item.depth+1); } catch (_) {}
+        try { add(window.QyrexBrowserAnalyzer.unwrapRecoveredLoaders(cur),'loader-unwrapped',item.depth+1); } catch (_) {}
+        try { const u=window.QyrexBrowserAnalyzer.extractUltimatePayload(cur); if(u?.source) add(u.source,u.method||'ultimate-payload',item.depth+1); } catch (_) {}
+        try { const b=window.QyrexBrowserAnalyzer.extractBestDecodedProgram(cur); if(b?.source) add(b.source,b.method||'best-program',item.depth+1); } catch (_) {}
+        try { for (const x of decodeGenericByteList(cur)) add(x,'byte-list',item.depth+1); } catch (_) {}
+
+        const strings = [];
+        try { strings.push(...window.QyrexBrowserAnalyzer.extractStrings(cur).map(x=>String(x.decoded||''))); } catch (_) {}
+        const tokens = cur.match(/\b[A-Za-z0-9+/_-]{16,}={0,2}\b/g) || [];
+        strings.push(...tokens.slice(0,200));
+        for (const raw of strings.slice(0,500)) {
+          if (!raw || raw.length > 5000000) continue;
+          try {
+            const r=window.QyrexBrowserAnalyzer.recursiveDecodeString(raw, window.QyrexBrowserAnalyzer.extractXorKeys ? window.QyrexBrowserAnalyzer.extractXorKeys(cur) : [], 32);
+            if(r?.changed) add(r.value,'recursive-string',item.depth+1);
+          } catch (_) {}
+          try { const b=decodeBase64(raw); if(b) add(b,'base64',item.depth+1); } catch (_) {}
+          try { const h=decodeHex(raw); if(h) add(h,'hex',item.depth+1); } catch (_) {}
+          if(raw.length <= 120000) {
+            try { for(const x of bruteSingleByteXor(raw)) add(x.value,`xor:${x.key}`,item.depth+1); } catch (_) {}
+          }
+        }
+
+        if (language === 'python' || /__builtins__|lambda\s+[^:]+:/i.test(cur)) {
+          try { const py=reducePythonUniversal(cur); if(py.source) add(py.source,'python-static',item.depth+1); layers.push(...py.layers); } catch (_) {}
+        }
+
+        // Plain loadstring/load string literals become direct code candidates.
+        const loaderRe=/\b(?:loadstring|load)\s*\(\s*(["'])([\s\S]*?)\1\s*\)/gi;
+        let lm; while((lm=loaderRe.exec(cur))) add(lm[2],'loader-literal',item.depth+1);
+      }
+    }
+
+    let final = best.source.trim();
+    // Strip only protector banners, never arbitrary source.
+    final = final.replace(/^\s*--\s*This file was protected using Luraph Obfuscator v[\d.]+.*$/gim,'').trim();
+    const recovered = final !== original && final.length > 0 && universalScoreSource(final) > universalScoreSource(original) + 1;
+    return {source:final,recovered,score:universalScoreSource(final),method:best.method,layers,language};
+  }
+
+  window.__qyrexUniversalRecover = universalRecover;
 
   function staticFallback(src, analysis) {
     const analyzer = window.QyrexBrowserAnalyzer;
@@ -3071,10 +3275,12 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
       const a = analyzeLuraph(src);
       state.originalAnalysis = a;
 
-      // Pass 1: aggressive static reconstruction.
-      let best = staticFallback(src, a);
-      let bestScore = scoreRecoveredProgram(best);
+      // Pass 1: universal browser reconstruction.
       const sourceLanguage = window.QyrexBrowserAnalyzer.detectSourceLanguage(src);
+      const universal = universalRecover(src, a);
+      let best = universal.source || staticFallback(src, a);
+      let bestScore = Math.max(scoreRecoveredProgram(best), universal.score || -1e9);
+      if (universal.recovered) log(`Universal reconstruction: ${universal.method} · ${best.length.toLocaleString()} chars`, "out");
 
       // Python wrappers are handled by a safe constant reducer and must never be
       // passed into the Luau/Roblox runtime. This is important for samples that
@@ -3082,7 +3288,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
       if (sourceLanguage === 'python') {
         const normalizedOriginal = src.replace(/\s+/g, ' ').trim();
         const normalizedBest = String(best || '').replace(/\s+/g, ' ').trim();
-        const pyRecovered = Boolean(best && normalizedBest !== normalizedOriginal);
+        const pyRecovered = Boolean(universal.recovered || (best && normalizedBest !== normalizedOriginal));
         state.cleaned = pyRecovered ? best.trim() : src;
         state.recovered = pyRecovered;
         state.analysis = analyzeLuraph(state.cleaned);
@@ -3109,10 +3315,13 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
       // Pass 2: execute Lua/Luau wrappers only inside the local Roblox-style sandbox.
       // Python input is reduced statically and never sent through the Luau runtime.
       let probeResult = null;
-      if (sourceLanguage !== 'python') {
-        probeResult = await probeWithRealLuau(src);
-      } else {
+      const probeSource = universal.recovered ? best : src;
+      if (sourceLanguage !== 'python' && probeSource.length <= 2000000) {
+        probeResult = await probeWithRealLuau(probeSource);
+      } else if (sourceLanguage === 'python') {
         probeResult = {ok:false, error:'Python source detected; Luau runtime skipped.'};
+      } else {
+        probeResult = {ok:false, error:'Large VM wrapper kept static to avoid executing the protector itself.'};
       }
       if (!probeResult.ok) {
         const probe = makeSafeRuntime();
@@ -3139,6 +3348,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
       for (let pass = 0; pass < 16; pass++) {
         const before = best;
         const rt = makeSafeRuntime();
+        if (best.length > 2000000) break;
         const rr = rt.run(best);
         for (const chunk of (rr.dynamicSources || []).slice(0, 100)) {
           const candidate = staticFallback(String(chunk.source || ''), a);
@@ -3162,7 +3372,9 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 
       // Final execution pass: only the recovered/final Luau enters the Roblox-style runtime.
       const rt = makeSafeRuntime();
-      const runtimeResult = rt.run(runtimeSource);
+      const runtimeResult = runtimeSource.length <= 2000000
+        ? rt.run(runtimeSource)
+        : { stdout:[], stderr:[], calls:[], steps:0, tree:[], bootstrapCount:0, dynamicSources:[], services:{}, env:{}, programTypes:['STATIC_ONLY'], compiled:{ok:true,count:0,diagnostics:[],target:'Static-only analysis for large source'} };
       state.runtime = runtimeResult;
       state.calls = (runtimeResult.calls || []).map(c => ({...c, line: c.line || 0}));
       state.engine = recovered
@@ -3183,8 +3395,10 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
         runtimeSteps: runtimeResult.steps || 0,
         compiler: runtimeResult.compiled,
         packs: [
-          "40-pass static reconstruction",
+          "Universal recursive reconstruction graph (32 depth)",
           "Recursive Base64 / URL-safe Base64",
+          "Python-safe static reducer (no execution)",
+          "Single-byte XOR brute-force candidate recovery",
           "XOR key discovery + byte loops",
           "Hex / decimal / octal / string.char recovery",
           "Constant folding + builder-loop recovery",
