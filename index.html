@@ -445,7 +445,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     <div class="top-spacer"></div>
 
     <div class="status-wrap">
-      <div class="runtime-pill">Qyrex Engine · DE TODO (Base64/XOR/Hex/URL/Reverse/char)</div>
+      <div class="runtime-pill">Qyrex Client Runtime · Luau → Roblox DataModel</div>
       <div class="status"><span class="status-dot" id="statusDot"></span><span id="runStatus">Idle</span></div>
       <span id="elapsed">00:00.0</span>
     </div>
@@ -484,8 +484,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 
       <div class="side-bottom">
         <div>Active script <strong id="activeFile">1 / 10</strong></div>
-        <div style="margin-top:3px">Runtime <strong>Qyrex Multi-pass</strong></div>
-        <div style="margin-top:3px">Local source analysis + server devirtualization</div>
+        <div style="margin-top:3px">Runtime <strong>Roblox Client Lab</strong></div>
+        <div style="margin-top:3px">Local deobfuscation + Luau compiler + Roblox DataModel simulation</div>
       </div>
     </aside>
 
@@ -1800,7 +1800,35 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
   }
 
   function staticFallback(src, analysis) {
-    return window.QyrexBrowserAnalyzer.cleanSource(src);
+    const analyzer = window.QyrexBrowserAnalyzer;
+    let current = String(src || '').replace(/^\uFEFF/, '').trim();
+    if (!current) return '';
+    const score = (text) => {
+      const s = String(text || '').trim();
+      if (!s) return -Infinity;
+      let n = 0;
+      if (/\b(?:print|warn|error)\s*\(/i.test(s)) n += 3;
+      if (/\b(?:game|workspace|Instance|Players|PlayerGui)\b/i.test(s)) n += 2;
+      if (/\b(?:function|local|return|if|for|while|repeat)\b/i.test(s)) n += 1.5;
+      if (/\b(?:loadstring|base64|decrypt|xor|string\.char|bit32\.)\b/i.test(s)) n -= 2;
+      if (/\b(?:Luraph|FlameCoder|Prometheus|IronBrew|VMProtect|dispatcher|handler)\b/i.test(s)) n -= 1.5;
+      n += Math.min(1, s.length / 25000);
+      return n;
+    };
+    for (let pass = 0; pass < 20; pass++) {
+      const before = current;
+      const candidates = [
+        analyzer.cleanSource(current),
+        analyzer.extractUltimatePayload(current)?.source || '',
+        analyzer.decodeAllLayers(current)?.source || ''
+      ].filter(Boolean);
+      const best = candidates.sort((a,b) => score(b) - score(a))[0];
+      if (best && score(best) >= score(current) && best !== current) current = best.trim();
+      const ultimate = analyzer.extractUltimatePayload(current);
+      if (ultimate?.source && score(ultimate.source) > score(current)) current = ultimate.source.trim();
+      if (current === before) break;
+    }
+    return analyzer.cleanSource(current).trimEnd() + '\n';
   }
 
   function runtimeKind(name, args = []) {
@@ -1890,42 +1918,85 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 
   function renderPlayOutput() {
     const src = String(state.cleaned || state.code || '').trim();
-    if (!src && !state.runtime) return `<div class="empty">Listo. Pulsa <b>Run</b> para compilar el Luau recuperado y simularlo dentro del entorno Roblox.</div>`;
-    const runtime = state.runtime || { stdout: [], stderr: [], calls: [], steps: 0, tree: [] };
+    if (!src && !state.runtime) return `<div class="empty">Listo. Pulsa <b>Run</b> para compilar el Luau recuperado dentro del Roblox Client Runtime local.</div>`;
+    const runtime = state.runtime || { stdout: [], stderr: [], calls: [], steps: 0, tree: [], bootstrapCount: 0, programTypes: [] };
     const stdout = Array.isArray(runtime.stdout) ? runtime.stdout : [];
     const stderr = Array.isArray(runtime.stderr) ? runtime.stderr : [];
-    const visibleKinds = new Set(['print','warn','error','ui','event','remote','network','library','service','instance']);
-    const raw = [];
-    stdout.forEach((message, i) => raw.push({ kind:'print', time:i, message:String(message) }));
-    stderr.forEach((message, i) => raw.push({ kind:/^error:/i.test(String(message)) ? 'error':'warn', time:i, message:String(message) }));
-    (runtime.calls || []).forEach((call, i) => {
-      const kind = call.kind || runtimeKind(call.name, call.args);
-      if (!visibleKinds.has(kind) || kind === 'print' || kind === 'warn' || kind === 'error') return;
-      raw.push({ kind, time:i, message:call.message || String(call.name || 'Roblox') });
-    });
-    const feed = raw.sort((a,b) => a.time - b.time).slice(0, 500);
-    const counts = { print:0, ui:0, event:0, remote:0, warn:0, error:0, library:0, service:0, network:0, instance:0 };
-    feed.forEach(x => { if (counts[x.kind] != null) counts[x.kind]++; });
-    const sourceWasRecovered = Boolean(state.recovered);
-    const detectedTypes = runtimeClassification(runtime);
-    $("outCount").textContent = String(feed.length);
+    const userNodes = (runtime.tree || []).filter(x => Number(x.id || 0) > Number(runtime.bootstrapCount || 0));
+    const uiClasses = /^(ScreenGui|Frame|TextLabel|TextButton|TextBox|ImageLabel|ImageButton|ScrollingFrame|ViewportFrame|SurfaceGui|BillboardGui|UIStroke|UICorner|UIListLayout|UIGridLayout|UIPadding|UIAspectRatioConstraint|UIScale)$/i;
+    const feed = [];
+    let seq = 0;
+    stdout.forEach(message => feed.push({ kind:'print', order:seq++, message:String(message) }));
+    stderr.forEach(message => feed.push({ kind:/^error:/i.test(String(message)) ? 'error':'warn', order:seq++, message:String(message) }));
+
+    // High-level observable Roblox behaviors. ChildAdded/property writes stay in Calls, not Play Output.
+    const seenServices = new Set(), seenEvents = new Set(), seenRemotes = new Set(), seenLibraries = new Set(), seenNetworks = new Set();
+    for (const node of userNodes) {
+      if (uiClasses.test(String(node.className || ''))) feed.push({kind:'ui',order:seq++,message:`${node.className} → ${node.path}`});
+    }
+    for (const c of (runtime.calls || [])) {
+      const kind = c.kind || runtimeKind(c.name,c.args);
+      if (kind === 'service') {
+        const key=String(c.message||c.name); if(seenServices.has(key)) continue; seenServices.add(key); feed.push({kind:'service',order:seq++,message:c.message||c.name});
+      } else if (kind === 'library') {
+        const key=String(c.message||c.name); if(seenLibraries.has(key)) continue; seenLibraries.add(key); feed.push({kind:'library',order:seq++,message:c.message||c.name});
+      } else if (kind === 'remote') {
+        const key=String(c.message||c.name); if(seenRemotes.has(key)) continue; seenRemotes.add(key); feed.push({kind:'remote',order:seq++,message:c.message||c.name});
+      } else if (kind === 'network') {
+        const key=String(c.message||c.name); if(seenNetworks.has(key)) continue; seenNetworks.add(key); feed.push({kind:'network',order:seq++,message:c.message||c.name});
+      } else if (kind === 'event' && /:(Connect|Once)$/.test(String(c.name||''))) {
+        const key=String(c.message||c.name); if(seenEvents.has(key)) continue; seenEvents.add(key); feed.push({kind:'event',order:seq++,message:c.message||c.name});
+      }
+    }
+    const ordered=feed.slice(0,800);
+    const counts={print:0,ui:0,event:0,remote:0,warn:0,error:0,library:0,service:0,network:0};
+    ordered.forEach(x=>{if(counts[x.kind]!=null)counts[x.kind]++;});
+    const detectedTypes=runtime.programTypes?.length?runtime.programTypes:runtimeClassification(runtime);
+    const hasOutput=ordered.length>0;
+    $("outCount").textContent=String(ordered.length);
     return `<div class="play-shell">
       <div class="play-head">
-        <div><div class="play-title">Roblox Client · Play Output</div><div class="play-sub">Luau final ejecutado dentro de un runtime local compatible con la superficie común de Roblox: game, Services, PlayerGui, Instances, Signals y Remotes.</div></div>
+        <div><div class="play-title">Roblox Client · Play Output</div><div class="play-sub">Salida observable del programa final dentro del DataModel local. El ruido interno del decodificador y los cambios internos del árbol no se mezclan aquí.</div></div>
         <div class="play-badges"><span class="play-badge">PRINT ${counts.print}</span><span class="play-badge">UI ${counts.ui}</span><span class="play-badge">EVENT ${counts.event}</span><span class="play-badge">REMOTE ${counts.remote}</span><span class="play-badge">LIB ${counts.library}</span><span class="play-badge">SERVICE ${counts.service}</span><span class="play-badge">WARN ${counts.warn}</span><span class="play-badge">ERROR ${counts.error}</span></div>
       </div>
-      ${sourceWasRecovered ? `<div class="play-note">PLAY está usando únicamente el código final recuperado; las operaciones internas de desofuscación no se muestran aquí.</div>` : ''}
-      <div class="banner"><strong>Roblox client classification</strong><br><span class="play-sub">Comportamiento observado: ${detectedTypes.map(x => `<span class="play-badge">${escapeHtml(x)}</span>`).join(' ')}</span></div>
-      ${runtime.compiled?.diagnostics?.length ? `<div class="banner"><strong>Compiler diagnostics</strong><br>${runtime.compiled.diagnostics.map(d => `<div class="play-note"><b>${escapeHtml(d.severity.toUpperCase())}</b> · ${escapeHtml(d.message)}</div>`).join('')}</div>` : ''}
+      ${state.recovered ? `<div class="play-note">Runtime recibió únicamente el código final recuperado. Las capas Base64/XOR/Hex/etc. quedaron fuera del Play Output.</div>` : ''}
+      <div class="banner"><strong>Roblox Client classification</strong><br><span class="play-sub">${detectedTypes.map(x=>`<span class="play-badge">${escapeHtml(x)}</span>`).join(' ')}</span></div>
+      ${runtime.compiled ? `<div class="banner"><strong>Luau Compiler</strong><br>${runtime.compiled.ok ? 'Compilation OK' : 'Compilation failed'} · ${Number(runtime.compiled.count||0).toLocaleString()} logical statements · ${escapeHtml(runtime.compiled.target||'Roblox Client Runtime')}</div>` : ''}
+      ${runtime.compiled?.diagnostics?.length ? `<div class="banner"><strong>Compiler diagnostics</strong>${runtime.compiled.diagnostics.map(d=>`<div class="play-note"><b>${escapeHtml(d.severity.toUpperCase())}</b> · ${escapeHtml(d.message)}</div>`).join('')}</div>` : ''}
       <div class="play-feed">
-        ${feed.length ? feed.map((x, i) => `<div class="play-line"><span class="play-time">+${String(i).padStart(3,'0')}</span><span class="play-kind ${escapeHtml(x.kind)}">${escapeHtml(String(x.kind).toUpperCase())}</span><span class="play-msg">${escapeHtml(x.message)}</span></div>`).join('') : `<div class="play-note">El script no produjo una salida observable en el entorno simulado.</div>`}
+        ${hasOutput ? ordered.map((x,i)=>`<div class="play-line"><span class="play-time">+${String(i).padStart(3,'0')}</span><span class="play-kind ${escapeHtml(x.kind)}">${escapeHtml(String(x.kind).toUpperCase())}</span><span class="play-msg">${escapeHtml(x.message)}</span></div>`).join('') : `<div class="play-note">El programa terminó sin salida observable. Revisa Environment o Calls + output para ver la ejecución interna.</div>`}
       </div>
-      ${src ? `<div class="banner"><strong>Final Luau / Runtime Source</strong><br><span class="play-sub">Este es el código que recibió el Runtime después de reconstruir las capas.</span></div><div class="qyrex-codebox"><pre>${escapeHtml(src)}</pre></div>` : ''}
-      <div class="banner"><strong>Roblox Client Runtime</strong><br>${Number(runtime.steps || 0).toLocaleString()} pasos · ${stdout.length.toLocaleString()} PRINT · ${stderr.length.toLocaleString()} WARN/ERROR · ${Math.max(0,Number(runtime.tree?.length || 0)-Number(runtime.bootstrapCount || 0)).toLocaleString()} Instances creadas por el script</div>
+      ${src ? `<div class="banner"><strong>Final Luau / Compiled Source</strong><br><span class="play-sub">Código que recibió el Runtime después de la reconstrucción.</span></div><div class="qyrex-codebox"><pre>${escapeHtml(src)}</pre></div>` : ''}
+      <div class="banner"><strong>Client session</strong><br>${Number(runtime.steps||0).toLocaleString()} pasos · ${stdout.length.toLocaleString()} PRINT · ${stderr.length.toLocaleString()} WARN/ERROR · ${userNodes.length.toLocaleString()} Instances creadas por el script · tipos: ${escapeHtml((detectedTypes||[]).join(', ')||'SCRIPT')}</div>
       ${renderRuntimeTree(runtime.tree)}
     </div>`;
   }
 
+  function renderEnvironment() {
+    const a = state.analysis || analyzeLuraph(state.cleaned || state.code || '');
+    const r = state.runtime;
+    if (!r) return renderAnalysis();
+    const env = r.env || {};
+    const services = Object.keys(r.services || {});
+    const userNodes=(r.tree||[]).filter(x=>Number(x.id||0)>Number(r.bootstrapCount||0));
+    const types=(r.programTypes||[]).length?r.programTypes:['SCRIPT'];
+    const globals=Object.keys(env).filter(k=>!k.startsWith('__')).sort();
+    return `<div class="metrics">
+      <div class="metric"><small>Runtime</small><b>Roblox Client</b></div>
+      <div class="metric"><small>Types</small><b>${escapeHtml(types.join(' · '))}</b></div>
+      <div class="metric"><small>DataModel</small><b>${Number(r.tree?.length||0).toLocaleString()} nodes</b></div>
+      <div class="metric"><small>Script nodes</small><b>${Number(userNodes.length||0).toLocaleString()}</b></div>
+    </div>
+    <div class="banner"><strong>Client environment</strong><br>game, workspace, Players.LocalPlayer, PlayerGui, Workspace, services, Instances, Signals, Remotes, task y shims de libraries están disponibles dentro de esta sesión.</div>
+    <div class="dumper-grid">
+      <div class="dumper-card"><div class="name">Services</div><div class="value">${escapeHtml(services.join(', ')||'none')}</div></div>
+      <div class="dumper-card"><div class="name">Globals</div><div class="value">${escapeHtml(globals.slice(0,80).join(', ')||'none')}</div></div>
+      <div class="dumper-card"><div class="name">Final source</div><div class="value">${Number((state.cleaned||state.code||'').length).toLocaleString()} characters · ${Number(r.compiled?.count||0).toLocaleString()} statements</div></div>
+      <div class="dumper-card"><div class="name">Observed behavior</div><div class="value">${escapeHtml(types.join(', '))}</div></div>
+    </div>
+    ${renderRuntimeTree(r.tree)}
+    ${state.cleaned ? `<div class="banner"><strong>Recovered / compiled Luau</strong></div><div class="qyrex-codebox"><pre>${escapeHtml(state.cleaned)}</pre></div>` : ''}`;
+  }
   function renderLogs() {
     if (!state.logs.length) {
       return `<div class="empty">Listo. Abre o pega un script y pulsa <b>Run</b> o <b>Deobfuscate ALL</b>.</div>`;
@@ -2005,7 +2076,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
       </div>
       ${r.dumperPacks ? `<div class="banner"><strong>Enabled dumper packs</strong><br>${r.dumperPacks.map(x => escapeHtml(x)).join("<br>")}</div>` : ""}
       ${r.stdout || r.stderr ? `<div class="banner"><strong>Runtime stdout / stderr</strong><br><div class="qyrex-codebox"><pre>${escapeHtml((r.stdout || "") + (r.stderr ? "\n" + r.stderr : ""))}</pre></div></div>` : ""}
-      ${r.runtimeCalls != null ? `<div class="banner"><strong>Safe runtime trace</strong><br>${Number(r.runtimeCalls).toLocaleString()} calls · ${Number(r.runtimeSteps || 0).toLocaleString()} steps. Roblox APIs are simulated locally; no real Roblox client, network, filesystem or executor is launched.</div>` : ""}`;
+      ${r.runtimeCalls != null ? `<div class="banner"><strong>Safe runtime trace</strong><br>${Number(r.runtimeCalls).toLocaleString()} calls · ${Number(r.runtimeSteps || 0).toLocaleString()} steps. El runtime es local: no inicia el cliente real de Roblox ni conecta/inserta código en otro proceso.</div>` : ""}`;
   }
 
   function renderRight() {
@@ -2048,410 +2119,266 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
   // Roblox client, executor, filesystem or network is launched.
   function makeSafeRuntime(){
     const stdout=[], stderr=[], calls=[], env=Object.create(null), tree=[];
-    const queued=[];
+    const queued=[], moduleCache=new Map();
     let steps=0, nextId=0, initializing=true, currentLine=0;
-    const MAX=50000, MAXLOG=10000, MAXCALLDEPTH=20;
-    const cut=(v,n=1000)=>String(v==null?'nil':v).slice(0,n);
-    const isObj=v=>v&&typeof v==='object';
+    const MAX_STEPS=120000, MAX_LOG=12000, MAX_CALL_DEPTH=40;
+    const cut=(v,n=1600)=>String(v==null?'nil':v).slice(0,n);
+    const isObj=v=>v!==null&&typeof v==='object';
+    const typeName=v=>v==null?'nil':v.__kind==='Instance'?'Instance':v.__kind||typeof v;
     const fmt=v=>{
-      if(v&&v.__kind==='Instance') return typeof v.GetFullName==='function' ? `<${v.ClassName} ${v.GetFullName()}>` : `<${v.ClassName} ${v.Name||v.ClassName}>`;
+      if(v&&v.__kind==='Instance') return `<${v.ClassName} ${v.GetFullName?v.GetFullName():v.Name||v.ClassName}>`;
+      if(v&&v.__kind==='EnumItem') return `${v.EnumType}.${v.Name}`;
+      if(v&&v.__kind==='Vector3') return `(${v.X}, ${v.Y}, ${v.Z})`;
+      if(v&&v.__kind==='Vector2') return `(${v.X}, ${v.Y})`;
+      if(v&&v.__kind==='Color3') return `Color3(${Math.round(v.R*255)}, ${Math.round(v.G*255)}, ${Math.round(v.B*255)})`;
+      if(v&&v.__kind==='UDim2') return `UDim2(${v.X.Scale}, ${v.X.Offset}, ${v.Y.Scale}, ${v.Y.Offset})`;
       if(v&&v.__kind) return `<${v.__kind}${v.Name?' '+v.Name:(v.name?' '+v.name:'')}>`;
       if(Array.isArray(v)) return `{${v.map(fmt).join(', ')}}`;
-      if(v&&v.__table)return '{table}';
-      if(typeof v==='string')return cut(v,1000);
-      if(typeof v==='function')return '<function>';
-      if(v==null)return 'nil';
+      if(v&&v.__table){const kv=[];for(const [k,x] of Object.entries(v.fields||{}))kv.push(`${k}=${fmt(x)}`);return kv.length?`{${kv.join(', ')}}`:'{}';}
+      if(typeof v==='string') return cut(v);
+      if(typeof v==='function') return '<function>';
+      if(v==null) return 'nil';
       return String(v);
     };
-    const push=(a,v)=>{if(a.length<MAXLOG)a.push(cut(v));};
-    const call=(name,args,result,type,line=currentLine)=>{
+    const push=(a,v)=>{if(a.length<MAX_LOG)a.push(cut(v));};
+    const call=(name,args=[],result=null,type=null,line=currentLine,extra={})=>{
       if(initializing)return;
-      if(calls.length<MAXLOG)calls.push({line,type:type||runtimeKind(name,args),kind:type||runtimeKind(name,args),name,args:args||[],message:`${name}(${(args||[]).map(fmt).join(', ')})`,source:'',result:fmt(result)});
+      const row={line,type:type||runtimeKind(name,args),kind:type||runtimeKind(name,args),name:String(name),args:args||[],message:`${name}(${(args||[]).map(fmt).join(', ')})`,source:'',result:result===undefined?'':fmt(result)};
+      Object.assign(row,extra); if(calls.length<MAX_LOG)calls.push(row);
     };
-    const tick=()=>{if(++steps>MAX)throw Error('Roblox simulation instruction limit reached');};
-    const truth=v=>v!==false&&v!==nil&&v!==undefined;
-    const nil=null;
+    const tick=()=>{if(++steps>MAX_STEPS)throw Error('simulation instruction limit reached');};
+    const truth=v=>v!==false&&v!==null&&v!==undefined;
 
-    function balanced(text, open='(', close=')'){
+    function balanced(text,open='(',close=')'){
       let d=0,q=null,e=false;
-      for(let i=0;i<text.length;i++){
-        const c=text[i];
-        if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}
-        if(c==='"'||c==="'"){q=c;continue}
-        if(c===open)d++; else if(c===close){d--;if(d===0)return i;}
-      }
+      for(let i=0;i<text.length;i++){const c=text[i];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"){q=c;continue}if(c===open)d++;else if(c===close){d--;if(d===0)return i;}}
       return -1;
     }
     function splitTop(s,sep=','){
       const out=[];let st=0,d=0,q=null,e=false;
-      for(let i=0;i<s.length;i++){
-        const c=s[i];
-        if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}
-        if(c==='"'||c==="'"){q=c;continue}
-        if('([{'.includes(c))d++; else if(')]}'.includes(c))d=Math.max(0,d-1); else if(d===0&&c===sep){out.push(s.slice(st,i).trim());st=i+1}
-      }
-      if(s.slice(st).trim())out.push(s.slice(st).trim());
-      return out;
+      for(let i=0;i<s.length;i++){const c=s[i];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"){q=c;continue}if('([{'.includes(c))d++;else if(')]}'.includes(c))d=Math.max(0,d-1);else if(d===0&&c===sep){out.push(s.slice(st,i).trim());st=i+1;}}
+      const t=s.slice(st).trim();if(t)out.push(t);return out;
     }
-    function strip(s){
-      s=String(s||'').trim();
-      while(s.startsWith('(')&&s.endsWith(')')){
-        const end=balanced(s,'(',')'); if(end!==s.length-1)break; s=s.slice(1,-1).trim();
-      }
-      return s;
-    }
+    function strip(s){s=String(s||'').trim();while(s.startsWith('(')&&s.endsWith(')')){const e=balanced(s,'(',')');if(e!==s.length-1)break;s=s.slice(1,-1).trim();}return s;}
     function unquote(s){
       s=String(s||'').trim();
       if((s.startsWith('"')&&s.endsWith('"'))||(s.startsWith("'")&&s.endsWith("'"))){
-        return s.slice(1,-1)
-          .replace(/\\x([0-9a-fA-F]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16)))
-          .replace(/\\u\{([0-9a-fA-F]+)\}/g,(_,h)=>String.fromCodePoint(parseInt(h,16)))
-          .replace(/\\([0-9]{1,3})/g,(_,d)=>String.fromCharCode(Number(d)))
-          .replace(/\\n/g,'\n').replace(/\\r/g,'\r').replace(/\\t/g,'\t')
-          .replace(/\\(.)/g,'$1');
+        return s.slice(1,-1).replace(/\\x([0-9a-fA-F]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16))).replace(/\\u\{([0-9a-fA-F]+)\}/g,(_,h)=>String.fromCodePoint(parseInt(h,16))).replace(/\\([0-9]{1,3})/g,(_,d)=>String.fromCharCode(Number(d))).replace(/\\n/g,'\n').replace(/\\r/g,'\r').replace(/\\t/g,'\t').replace(/\\(.)/g,'$1');
       }
-      const m=/^\[(=*)\[([\s\S]*)\]\1\]$/.exec(s); return m?m[2]:null;
+      const m=/^\[(=*)\[([\s\S]*)\]\1\]$/.exec(s);return m?m[2]:null;
     }
+    function cleanLine(s){let q=null,e=false;for(let i=0;i<s.length;i++){const c=s[i];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"){q=c;continue}if(c==='-'&&s[i+1]==='-')return s.slice(0,i).trim();}return s.trim();}
     function findTopOp(s,ops){
       let d=0,q=null,e=false;
-      for(let i=s.length-1;i>=0;i--){
-        const c=s[i];
-        if(q){if(c==='\\'){i--;continue}if(c===q)q=null;continue}
-        if(c==='"'||c==="'"){q=c;continue}
-        if(')]}'.includes(c))d++; else if('([{'.includes(c))d=Math.max(0,d-1); if(d)continue;
-        for(const op of ops){const st=i-op.length+1;if(st>=0&&s.slice(st,i+1)===op)return [st,op]}
-      }
+      for(let i=s.length-1;i>=0;i--){const c=s[i];if(q){if(c==='\\'){i--;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"){q=c;continue}if(')]}'.includes(c))d++;else if('([{'.includes(c))d=Math.max(0,d-1);if(d)continue;for(const op of ops){const st=i-op.length+1;if(st>=0&&s.slice(st,i+1)===op)return [st,op];}}
       return null;
     }
 
-    function makeSignal(owner,signalName){
+    function attach(parent,child){if(!parent||!child||parent===child)return;if(!Array.isArray(parent.__children))parent.__children=[];if(child.__parent===parent)return;if(child.__parent)detach(child.__parent,child);parent.__children.push(child);child.__parent=parent;}
+    function detach(parent,child){if(parent?.__children){const i=parent.__children.indexOf(child);if(i>=0)parent.__children.splice(i,1);}if(child)child.__parent=null;}
+    function descendants(o,out=[]){for(const c of (o?.__children||[])){out.push(c);descendants(c,out);}return out;}
+    function fullName(o){if(!o)return 'nil';const p=[];let c=o,g=0;while(c&&g++<120){p.unshift(c.Name||c.name||c.ClassName||c.__kind);c=c.__parent||null;}return p.join('.');}
+    function isA(o,c){if(!o)return false;c=String(c||'');if(c==='Instance')return o.__kind==='Instance'||o.__kind==='Service';if(o.ClassName===c)return true;const cls=String(o.ClassName||'');if(c==='GuiObject')return /Gui|Frame|Label|Button|TextBox|ScrollingFrame|ViewportFrame|Image|UI/.test(cls);if(c==='BasePart')return /Part|MeshPart|UnionOperation/.test(cls);if(c==='PVInstance')return /Part|MeshPart|UnionOperation|Model/.test(cls);return false;}
+    function recordTree(o){tree.push(o);}
+
+    function makeSignal(owner,name){
       const handlers=[];
-      const signal={
-        __kind:'RBXScriptSignal',name:signalName,_handlers:handlers,
-        Connect(fn){
-          if(typeof fn==='function' || fn?.__kind==='LuaFunction'){handlers.push(fn);}
-          const c={__kind:'RBXScriptConnection',Connected:true,Disconnect(){this.Connected=false;const i=handlers.indexOf(fn);if(i>=0)handlers.splice(i,1);call(`${owner.Name||owner.name}.${signalName}:Disconnect`,[],null,'event')}};
-          call(`${owner.Name||owner.name}.${signalName}:Connect`,[fn],c,'event');
-          return c;
-        },
-        Once(fn){
-          if(typeof fn==='function' || fn?.__kind==='LuaFunction') handlers.push(fn);const c={__kind:'RBXScriptConnection',Connected:true,Disconnect(){this.Connected=false;const i=handlers.indexOf(fn);if(i>=0)handlers.splice(i,1);}};call(`${owner.Name||owner.name}.${signalName}:Once`,[fn],c,'event');return c;
-        },
-        Fire(...a){
-          call(`${owner.Name||owner.name}.${signalName}:Fire`,a,null,'event');
-          for(const fn of handlers.slice()){ if(fn?.__kind==='LuaFunction') invokeLua(fn,a); else if(typeof fn==='function') fn(...a); }
-        }
-      };
-      return signal;
+      const sig={__kind:'RBXScriptSignal',name,_handlers:handlers,
+        Connect(fn){if(fn)handlers.push(fn);const c={__kind:'RBXScriptConnection',Connected:true,Disconnect(){if(!this.Connected)return;this.Connected=false;const i=handlers.indexOf(fn);if(i>=0)handlers.splice(i,1);call(`${owner.Name||owner.ClassName}.${name}:Disconnect`,[],null,'event');}};call(`${owner.Name||owner.ClassName}.${name}:Connect`,[fn],c,'event');return c;},
+        Once(fn){const c=this.Connect(fn);c.Once=true;return c;},
+        Fire(...args){call(`${owner.Name||owner.ClassName}.${name}:Fire`,args,null,'event');for(const fn of handlers.slice()){if(fn?.__kind==='LuaFunction')invokeLua(fn,args);else if(typeof fn==='function')fn(...args);}}
+      };return sig;
     }
 
-    function attach(parent,child){
-      if(!parent||!child||parent===child)return;
-      if(!Array.isArray(parent.__children))parent.__children=[];
-      if(child.__parent===parent)return;
-      if(child.__parent)detach(child.__parent,child);
-      parent.__children.push(child); child.__parent=parent;
-    }
-    function detach(parent,child){
-      if(parent?.__children){const i=parent.__children.indexOf(child);if(i>=0)parent.__children.splice(i,1)}
-      if(child)child.__parent=null;
-    }
-    function descendants(o,out=[]){for(const c of (o?.__children||[])){out.push(c);descendants(c,out)}return out;}
-    function getFullName(o){if(!o)return 'nil';const p=[];let c=o,g=0;while(c&&g++<100){p.unshift(c.Name||c.name||c.ClassName||c.__kind);c=c.__parent||c.Parent}return p.join('.')}
-    function instanceIsA(o,c){
-      if(!o)return false; c=String(c||''); if(c==='Instance')return true; if(o.ClassName===c)return true;
-      if(c==='GuiObject')return /Gui|Frame|Label|Button|TextBox|ScrollingFrame|ViewportFrame|UI/.test(o.ClassName||'');
-      if(c==='BasePart'||c==='PVInstance')return /Part|Mesh|Model/.test(o.ClassName||'');
-      return false;
-    }
-    function addTree(o){tree.push({obj:o,id:o.__id,kind:o.ClassName||o.__kind,name:o.Name||o.name,parent:'nil',parentId:null,path:getFullName(o),className:o.ClassName||o.__kind});}
     function setProp(o,k,v){
       if(!o)return v;
       if(k==='Parent'){o.Parent=v;return v;}
-      o[k]=v; call(`${o.Name||o.ClassName}.${k}`,[v],v,/Gui|Frame|Label|Button|TextBox|ScrollingFrame|ViewportFrame|SurfaceGui|BillboardGui|UI/.test(o.ClassName)?'ui':'instance');
-      if(k==='Name')o.name=v;
+      o[k]=v;
+      if(k==='Name')o.name=String(v);
+      const ui=/Gui|Frame|Label|Button|TextBox|ImageLabel|ImageButton|ScrollingFrame|ViewportFrame|SurfaceGui|BillboardGui|UICorner|UIStroke|UIListLayout|UIGridLayout|UIPadding|UIAspectRatioConstraint|UIScale/.test(String(o.ClassName||''));
+      if(['Text','Visible','Enabled','Size','Position','AnchorPoint','BackgroundColor3','BackgroundTransparency','TextColor3','TextSize','Image','ImageTransparency','LayoutOrder','ZIndex'].includes(k))call(`${o.Name||o.ClassName}.${k}`,[v],v,ui?'ui':'instance');
       return v;
+    }
+    function addCommonMethods(o){
+      o.GetFullName=()=>fullName(o);
+      o.GetChildren=()=>o.__children.slice();
+      o.GetDescendants=()=>descendants(o,[]);
+      o.FindFirstChild=(n,recursive=false)=>{const direct=o.__children.find(x=>x.Name===String(n));if(direct||!recursive)return direct||null;return descendants(o,[]).find(x=>x.Name===String(n))||null;};
+      o.FindFirstChildWhichIsA=(c,recursive=false)=>(recursive?descendants(o,[]):o.__children).find(x=>isA(x,c))||null;
+      o.WaitForChild=(n)=>o.FindFirstChild(n,true)||(()=>{const x=createInstance('Folder',String(n));x.Parent=o;return x;})();
+      o.IsA=c=>isA(o,c);
+      o.Destroy=()=>{call(`${o.Name||o.ClassName}:Destroy`,[],null,'instance');if(o.Parent)detach(o.Parent,o);o.__destroyed=true;};
+      o.Clone=()=>{const c=createInstance(o.ClassName,o.Name);for(const k of Object.keys(o)){if(['__kind','__id','__parent','__children','Parent'].includes(k)||typeof o[k]==='function')continue;try{if(['string','number','boolean'].includes(typeof o[k]))c[k]=o[k];}catch{}}return c;};
+      o.ClearAllChildren=()=>{for(const x of o.__children.slice())x.Destroy();o.__children=[];call(`${o.Name}:ClearAllChildren`,[],null,'instance');};
+      o.SetAttribute=(k,v)=>{o.__attributes??=Object.create(null);o.__attributes[k]=v;call(`${o.Name}:SetAttribute`,[k,v],v,'instance');return v;};
+      o.GetAttribute=k=>o.__attributes?.[k];
+      o.GetAttributes=()=>({...o.__attributes});
+      o.GetPropertyChangedSignal=k=>makeSignal(o,`PropertyChanged(${k})`);
+      o.GetAttributeChangedSignal=k=>makeSignal(o,`AttributeChanged(${k})`);
+      o.Changed=makeSignal(o,'Changed');o.AncestryChanged=makeSignal(o,'AncestryChanged');o.ChildAdded=makeSignal(o,'ChildAdded');o.ChildRemoved=makeSignal(o,'ChildRemoved');
     }
     function createInstance(className,name){
       const cls=String(className||'Folder');
-      const o={__kind:'Instance',__id:++nextId,ClassName:cls,Name:name||cls,Archivable:true,Visible:/Gui|Frame|Label|Button|TextBox|UI/.test(cls),__parent:null,__children:[]};
-      Object.defineProperty(o,'Parent',{enumerable:true,configurable:true,get(){return o.__parent||null},set(v){if(v===o.__parent)return;if(o.__parent)detach(o.__parent,o);if(v)attach(v,o);call(`${o.Name}.Parent`,[v],v,/Gui|Frame|Label|Button|TextBox|ScrollingFrame|ViewportFrame|SurfaceGui|BillboardGui|UI/.test(o.ClassName)?'ui':'instance')}});
-      o.GetFullName=()=>getFullName(o);
-      o.GetChildren=()=>o.__children.slice();
-      o.GetDescendants=()=>descendants(o,[]);
-      o.FindFirstChild=(n,recursive=false)=>{const d=o.__children.find(c=>c.Name===String(n));if(d||!recursive)return d||null;return descendants(o,[]).find(c=>c.Name===String(n))||null};
-      o.WaitForChild=(n)=>o.FindFirstChild(n,true)||createInstance('Folder',String(n));
-      o.FindFirstChildWhichIsA=(c,recursive=false)=>(recursive?descendants(o,[]):o.__children).find(x=>instanceIsA(x,c))||null;
-      o.IsA=c=>instanceIsA(o,c);
-      o.Destroy=()=>{call(`${o.Name}:Destroy`,[],null,'instance');if(o.Parent)detach(o.Parent,o);o.__destroyed=true};
-      o.Clone=()=>{const c=createInstance(o.ClassName,o.Name);for(const k of ['Text','Image','Visible','Enabled','Position','Size','AnchorPoint','BackgroundTransparency'])if(k in o)c[k]=o[k];return c};
-      o.ClearAllChildren=()=>{for(const c of o.__children.slice())c.Destroy();o.__children=[];call(`${o.Name}:ClearAllChildren`,[],null,'instance')};
-      o.SetAttribute=(k,v)=>{if(!o.__attributes)o.__attributes=Object.create(null);o.__attributes[k]=v;call(`${o.Name}:SetAttribute`,[k,v],v,'instance');return v};
-      o.GetAttribute=k=>o.__attributes?.[k];
-      o.GetPropertyChangedSignal=k=>makeSignal(o,`PropertyChanged(${k})`);
-      o.GetAttributeChangedSignal=k=>makeSignal(o,`AttributeChanged(${k})`);
-      o.Changed=makeSignal(o,'Changed');o.AncestryChanged=makeSignal(o,'AncestryChanged');
-      if(/TextLabel|TextButton|TextBox/.test(cls)){o.Text='';o.TextSize=14;o.TextColor3={__kind:'Color3',R:1,G:1,B:1};}
-      if(/ImageLabel|ImageButton/.test(cls))o.Image='';
+      const o={__kind:'Instance',__id:++nextId,ClassName:cls,Name:name||cls,name:name||cls,Archivable:true,Enabled:true,Visible:true,__parent:null,__children:[],__attributes:Object.create(null)};
+      Object.defineProperty(o,'Parent',{enumerable:true,configurable:true,get(){return o.__parent||null},set(v){if(v===o.__parent)return;if(o.__parent)detach(o.__parent,o);if(v)attach(v,o);call(`${o.Name}.Parent`,[v],v,'ui'===runtimeKind('Instance.new',[cls])?'ui':'instance');if(v?.ChildAdded&&v!==o)v.ChildAdded.Fire(o);}});
+      addCommonMethods(o);
+      if(/^Text(Label|Button|Box)$/.test(cls)||cls==='TextLabel'||cls==='TextButton'||cls==='TextBox'){o.Text='';o.TextSize=14;o.TextColor3=env.Color3?.new?.(1,1,1)||{__kind:'Color3',R:1,G:1,B:1};}
+      if(/^(ImageLabel|ImageButton)$/.test(cls)){o.Image='';o.ImageTransparency=0;}
       if(/Button/.test(cls))o.MouseButton1Click=makeSignal(o,'MouseButton1Click');
-      if(/GuiObject|Frame|Label|Button|TextBox|ScrollingFrame|ViewportFrame|ImageLabel|ImageButton/.test(cls)){
-        o.Position={__kind:'UDim2',X:{Scale:0,Offset:0},Y:{Scale:0,Offset:0}};o.Size={__kind:'UDim2',X:{Scale:0,Offset:0},Y:{Scale:0,Offset:0}};o.AnchorPoint={X:0,Y:0};o.BackgroundTransparency=0;o.Visible=true;o.ZIndex=1;
-      }
-      if(cls==='ScreenGui'){o.ResetOnSpawn=true;o.Enabled=true;}
-      if(cls==='RemoteEvent'){o.OnClientEvent=makeSignal(o,'OnClientEvent');o.OnServerEvent=makeSignal(o,'OnServerEvent');o.FireServer=(...a)=>{call(`${o.Name}:FireServer`,a,null,'remote');};o.FireAllClients=(...a)=>{call(`${o.Name}:FireAllClients`,a,null,'remote');};}
+      if(/GuiObject|Frame|Label|Button|TextBox|ScrollingFrame|ViewportFrame|ImageLabel|ImageButton/.test(cls)){o.Position=env.UDim2?.new?.()||null;o.Size=env.UDim2?.new?.()||null;o.AnchorPoint={X:0,Y:0};o.BackgroundTransparency=0;o.ZIndex=1;}
+      if(cls==='ScreenGui'){o.ResetOnSpawn=true;o.IgnoreGuiInset=false;}
+      if(cls==='RemoteEvent'){o.OnClientEvent=makeSignal(o,'OnClientEvent');o.OnServerEvent=makeSignal(o,'OnServerEvent');o.FireServer=(...a)=>{call(`${o.Name}:FireServer`,a,null,'remote');};o.FireAllClients=(...a)=>{call(`${o.Name}:FireAllClients`,a,null,'remote');};o.FireClient=(...a)=>{call(`${o.Name}:FireClient`,a,null,'remote');};}
       if(cls==='RemoteFunction'){o.OnClientInvoke=null;o.OnServerInvoke=null;o.InvokeServer=(...a)=>{call(`${o.Name}:InvokeServer`,a,null,'remote');return null};}
       if(cls==='BindableEvent'){o.Event=makeSignal(o,'Event');o.Fire=(...a)=>o.Event.Fire(...a);}
-      if(cls==='UIListLayout'||cls==='UIGridLayout'||cls==='UIPadding'||cls==='UICorner'||cls==='UIStroke'){}
-      addTree(o); return o;
+      if(cls==='BindableFunction'){o.OnInvoke=null;o.Invoke=(...a)=>{call(`${o.Name}:Invoke`,a,null,'event');const f=o.OnInvoke;return f?.__kind==='LuaFunction'?invokeLua(f,a):typeof f==='function'?f(...a):null;};}
+      recordTree(o);return o;
     }
 
     const DataModel=createInstance('DataModel','game');
-    const serviceNames=['Workspace','Players','ReplicatedStorage','ReplicatedFirst','StarterGui','StarterPlayer','StarterPack','Lighting','RunService','UserInputService','ContextActionService','TweenService','HttpService','SoundService','CoreGui','ServerStorage','ServerScriptService','Teams','Debris','CollectionService'];
+    const serviceNames=['Workspace','Players','ReplicatedStorage','ReplicatedFirst','StarterGui','StarterPlayer','StarterPack','Lighting','RunService','UserInputService','ContextActionService','TweenService','HttpService','SoundService','CoreGui','ServerStorage','ServerScriptService','Teams','Debris','CollectionService','MarketplaceService','TeleportService','LocalizationService','Stats','Chat'];
     const services=Object.create(null);
     function makeService(name){
-      name=String(name);
-      if(services[name])return services[name];
-      const s=createInstance(name==='Workspace'?'Workspace':'Service',name);s.ClassName=name;s.__kind='Service';s.Parent=DataModel;s.GetService=n=>{call(`${name}:GetService`,[n],null,'service');return makeService(n)};
-      s.GetChildren=s.GetChildren.bind(s);s.GetDescendants=s.GetDescendants.bind(s);s.FindFirstChild=s.FindFirstChild.bind(s);s.WaitForChild=s.WaitForChild.bind(s);
+      name=String(name||'Unknown');if(services[name])return services[name];
+      const s=createInstance(name==='Workspace'?'Workspace':'Service',name);s.__kind='Service';s.ClassName=name;s.Parent=DataModel;s.GetService=n=>{call(`${name}:GetService`,[n],null,'service');return makeService(n)};services[name]=s;env[name]=s;DataModel[name]=s;
+      if(name==='Workspace'){s.CurrentCamera=createInstance('Camera','CurrentCamera');s.CurrentCamera.Parent=s;}
       if(name==='Players'){
-        const player=createInstance('Player','LocalPlayer');player.UserId=1;player.DisplayName='LocalPlayer';player.Name='LocalPlayer';player.Parent=s;
-        player.PlayerGui=createInstance('PlayerGui','PlayerGui');player.PlayerGui.Parent=player;
-        player.Backpack=createInstance('Backpack','Backpack');player.Backpack.Parent=player;
-        player.PlayerScripts=createInstance('PlayerScripts','PlayerScripts');player.PlayerScripts.Parent=player;
-        player.Character=createInstance('Model','Character');player.Character.Parent=services.Workspace||null;
-        player.CharacterAdded=makeSignal(player,'CharacterAdded');player.ChildAdded=makeSignal(player,'ChildAdded');player.CharacterAppearanceLoaded=makeSignal(player,'CharacterAppearanceLoaded');
-        s.LocalPlayer=player;s.GetPlayers=()=>[player];s.PlayerAdded=makeSignal(s,'PlayerAdded');s.PlayerRemoving=makeSignal(s,'PlayerRemoving');s.MaxPlayers=50;s.NumPlayers=1;
+        const p=createInstance('Player','LocalPlayer');p.UserId=1;p.DisplayName='LocalPlayer';p.Name='LocalPlayer';p.Team=null;p.Parent=s;
+        p.PlayerGui=createInstance('PlayerGui','PlayerGui');p.PlayerGui.Parent=p;
+        p.Backpack=createInstance('Backpack','Backpack');p.Backpack.Parent=p;
+        p.PlayerScripts=createInstance('PlayerScripts','PlayerScripts');p.PlayerScripts.Parent=p;
+        p.Character=createInstance('Model','Character');p.Character.Parent=services.Workspace||null;
+        p.CharacterAdded=makeSignal(p,'CharacterAdded');p.CharacterRemoving=makeSignal(p,'CharacterRemoving');p.ChildAdded=makeSignal(p,'ChildAdded');p.CharacterAppearanceLoaded=makeSignal(p,'CharacterAppearanceLoaded');p.Idled=makeSignal(p,'Idled');
+        s.LocalPlayer=p;s.GetPlayers=()=>[p];s.PlayerAdded=makeSignal(s,'PlayerAdded');s.PlayerRemoving=makeSignal(s,'PlayerRemoving');s.MaxPlayers=50;s.NumPlayers=1;
       }
-      if(name==='RunService'){s.Heartbeat=makeSignal(s,'Heartbeat');s.RenderStepped=makeSignal(s,'RenderStepped');s.Stepped=makeSignal(s,'Stepped');s.IsClient=()=>true;s.IsServer=()=>false;s.IsStudio=()=>true;s.IsRunning=()=>true;}
-      if(name==='UserInputService'){s.InputBegan=makeSignal(s,'InputBegan');s.InputEnded=makeSignal(s,'InputEnded');s.InputChanged=makeSignal(s,'InputChanged');s.TouchEnabled=false;s.KeyboardEnabled=true;s.MouseEnabled=true;}
-      if(name==='ContextActionService')s.BindAction=(...a)=>{call('ContextActionService:BindAction',a,null,'event');return null};
-      if(name==='TweenService')s.Create=(obj,info,props)=>{if(obj&&props)for(const k of Object.keys(props))setProp(obj,k,props[k]);call('TweenService:Create',[obj,info,props],'<Tween>','instance');return {__kind:'Tween',Play:()=>call('Tween:Play',[],null,'event'),Cancel:()=>call('Tween:Cancel',[],null,'event')}};
+      if(name==='RunService'){s.Heartbeat=makeSignal(s,'Heartbeat');s.RenderStepped=makeSignal(s,'RenderStepped');s.Stepped=makeSignal(s,'Stepped');s.PreRender=makeSignal(s,'PreRender');s.PostSimulation=makeSignal(s,'PostSimulation');s.PreSimulation=makeSignal(s,'PreSimulation');s.IsClient=()=>true;s.IsServer=()=>false;s.IsStudio=()=>true;s.IsRunning=()=>true;}
+      if(name==='UserInputService'){s.InputBegan=makeSignal(s,'InputBegan');s.InputEnded=makeSignal(s,'InputEnded');s.InputChanged=makeSignal(s,'InputChanged');s.TouchEnabled=false;s.KeyboardEnabled=true;s.MouseEnabled=true;s.GamepadEnabled=false;}
+      if(name==='ContextActionService'){s.BindAction=(...a)=>{call('ContextActionService:BindAction',a,null,'event');return null};s.UnbindAction=(...a)=>call('ContextActionService:UnbindAction',a,null,'event');}
+      if(name==='TweenService')s.Create=(obj,info,props)=>{if(obj&&props)for(const [k,v] of Object.entries(props))setProp(obj,k,v);call('TweenService:Create',[obj,info,props],'<Tween>','instance');return {__kind:'Tween',Play:()=>call('Tween:Play',[],null,'event'),Pause:()=>call('Tween:Pause',[],null,'event'),Cancel:()=>call('Tween:Cancel',[],null,'event'),Completed:makeSignal(obj||s,'Completed')}};
       if(name==='Debris')s.AddItem=(obj,t)=>call('Debris:AddItem',[obj,t],null,'instance');
       if(name==='StarterGui')s.SetCore=(key,val)=>{call('StarterGui:SetCore',[key,val],null,'ui');return null};
-      if(name==='HttpService'){s.JSONEncode=v=>JSON.stringify(v);s.JSONDecode=v=>{try{return JSON.parse(v)}catch{return null}};}
-      services[name]=s;env[name]=s;DataModel[name]=s;return s;
+      if(name==='HttpService'){s.JSONEncode=v=>{try{return JSON.stringify(toPlain(v))}catch{return '{}'}};s.JSONDecode=v=>{try{return JSON.parse(v)}catch{return null}};s.GenerateGUID=(braces=false)=>{const x='xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;const n=c==='x'?r:(r&3|8);return n.toString(16)});return braces?`{${x}}`:x;};s.UrlEncode=v=>encodeURIComponent(String(v));}
+      if(name==='MarketplaceService')s.GetProductInfo=id=>{call('MarketplaceService:GetProductInfo',[id],null,'service');return {Name:`Asset ${id}`,AssetId:Number(id)||0,Description:'Simulated asset metadata'}};
+      if(name==='TeleportService')s.Teleport=(placeId,player)=>call('TeleportService:Teleport',[placeId,player],null,'event');
+      return s;
     }
-    const workspaceRoot=makeService('Workspace');
-    for(const n of serviceNames)makeService(n);
-    DataModel.GetService=n=>{call('game:GetService',[n],null,'service');return makeService(n)};DataModel.IsLoaded=()=>true;DataModel.GetChildren=()=>DataModel.__children.slice();DataModel.GetDescendants=()=>descendants(DataModel,[]);
-    DataModel.FindFirstChild=(n,recursive=false)=>{const d=DataModel.__children.find(c=>c.Name===String(n));if(d||!recursive)return d||null;return descendants(DataModel,[]).find(c=>c.Name===String(n))||null};
-    const localPlayer=services.Players.LocalPlayer;env.script=createInstance('LocalScript','Script');env.script.Parent=localPlayer.PlayerScripts;
-    const bootstrapCount=nextId;
+    const workspaceRoot=makeService('Workspace');for(const n of serviceNames)makeService(n);
+    DataModel.GetService=n=>{call('game:GetService',[n],null,'service');return makeService(n)};DataModel.GetChildren=()=>DataModel.__children.slice();DataModel.GetDescendants=()=>descendants(DataModel,[]);DataModel.FindFirstChild=(n,r=false)=>DataModel.__children.find(x=>x.Name===String(n))||(!r?null:descendants(DataModel,[]).find(x=>x.Name===String(n))||null);DataModel.IsLoaded=()=>true;
 
+    function libraryObject(name='Module'){const lib={__kind:'Library',Name:name,name,CreateWindow:(...a)=>uiFactory(name,'Window',a),CreateTab:(...a)=>uiFactory(name,'Tab',a),CreateSection:(...a)=>uiFactory(name,'Section',a),CreateButton:(...a)=>uiFactory(name,'Button',a),CreateToggle:(...a)=>uiFactory(name,'Toggle',a),CreateSlider:(...a)=>uiFactory(name,'Slider',a),CreateDropdown:(...a)=>uiFactory(name,'Dropdown',a),CreateLabel:(...a)=>uiFactory(name,'Label',a),CreateParagraph:(...a)=>uiFactory(name,'Paragraph',a),AddTab:(...a)=>uiFactory(name,'Tab',a),AddButton:(...a)=>uiFactory(name,'Button',a),Notify:(...a)=>{call(`${name}:Notify`,a,null,'ui');return null}};return lib;}
+    function uiFactory(owner,kind,args){call(`${owner}:${kind}`,args,null,kind==='Window'||kind==='Tab'||kind==='Button'||kind==='Toggle'||kind==='Slider'||kind==='Dropdown'||kind==='Label'||kind==='Paragraph'?'ui':'library');const cls=kind==='Button'?'TextButton':kind==='Label'||kind==='Paragraph'?'TextLabel':kind==='Window'||kind==='Tab'?'Frame':'Folder';const x=createInstance(cls,`${kind}${nextId}`);const pg=services.Players?.LocalPlayer?.PlayerGui;if(pg&&/(Window|Tab|Button|Label|Paragraph|Toggle|Slider|Dropdown)/.test(kind))x.Parent=pg;return x;}
+    const localPlayer=services.Players.LocalPlayer;
+    const bootstrapCount=tree.length;
     env.game=DataModel;env.workspace=workspaceRoot;
-    env.Instance={new:c=>{const o=createInstance(String(c));call('Instance.new',[c],o,runtimeKind('Instance.new',[c]));return o}};
+    DataModel.HttpGet=(url)=>{call('game:HttpGet',[url],'https://simulated.local/','network');return String(url||'');};
+    DataModel.GetObjects=(id)=>{call('game:GetObjects',[id],[], 'service');return [];};
+    env.script=createInstance('LocalScript','Script');env.script.Parent=localPlayer.PlayerScripts;
+    env.Instance={new:(c,parent)=>{const o=createInstance(String(c));if(parent)o.Parent=parent;call('Instance.new',[c,parent],o,runtimeKind('Instance.new',[c]));return o}};
     env.Enum=new Proxy({}, {get:(_,k)=>new Proxy({__kind:'EnumType',name:k},{get:(__,p)=>({__kind:'EnumItem',EnumType:k,Name:String(p),Value:0,toString:()=>`${k}.${String(p)}`})})});
     env.Vector2=(x=0,y=0)=>({__kind:'Vector2',X:Number(x),Y:Number(y)});env.Vector3=(x=0,y=0,z=0)=>({__kind:'Vector3',X:Number(x),Y:Number(y),Z:Number(z)});
-    env.Color3={fromRGB:(r,g,b)=>({__kind:'Color3',R:Number(r)/255,G:Number(g)/255,B:Number(b)/255}),new:(r,g,b)=>({__kind:'Color3',R:Number(r),G:Number(g),B:Number(b)})};
-    env.UDim={new:(s=0,o=0)=>({__kind:'UDim',Scale:Number(s),Offset:Number(o)})};
-    env.UDim2={new:(a=0,b=0,c=0,d=0)=>({__kind:'UDim2',X:{Scale:Number(a),Offset:Number(b)},Y:{Scale:Number(c),Offset:Number(d)}}),fromScale:(x,y)=>({__kind:'UDim2',X:{Scale:Number(x),Offset:0},Y:{Scale:Number(y),Offset:0}}),fromOffset:(x,y)=>({__kind:'UDim2',X:{Scale:0,Offset:Number(x)},Y:{Scale:0,Offset:Number(y)}})};
-    env.Rect=env.Rect||{};env.NumberRange={new:(a,b=a)=>({__kind:'NumberRange',Min:Number(a),Max:Number(b)})};
-    env.type=v=>v==null?'nil':v.__kind==='table'?'table':typeof v;env.typeof=env.type;env.tostring=fmt;env.tonumber=v=>{const n=Number(v);return Number.isFinite(n)?n:null};
-    env.select=(n,...a)=>n==='\u0023'?a.length:a[Number(n)-1];
-    env.math={floor:Math.floor,ceil:Math.ceil,abs:Math.abs,max:Math.max,min:Math.min,clamp:(x,a,b)=>Math.max(a,Math.min(b,x)),random:(a,b)=>a==null?.5:b==null?1+Math.floor(.5*a):a+Math.floor(.5*(b-a+1))};
-    env.string={char:(...a)=>String.fromCodePoint(...a.map(Number)),byte:(s,a=1,b=a)=>{const out=[];for(let i=Number(a);i<=Number(b);i++)out.push(String(s).charCodeAt(i-1));return out.length===1?out[0]:out},reverse:s=>String(s).split('').reverse().join(''),rep:(s,n)=>String(s).repeat(Math.max(0,Math.min(100000,Number(n)||0))),sub:(s,a,b)=>String(s).substring(Number(a)-1,b==null?undefined:Number(b)),lower:s=>String(s).toLowerCase(),upper:s=>String(s).toUpperCase(),find:(s,p)=>{const i=String(s).indexOf(String(p));return i<0?null:i+1},format:(...a)=>String(a[0]??'').replace(/%[sdif]/g,()=>String(a.shift()))};
-    env.table={concat:(t,sep='')=>(Array.isArray(t)?t:(t?.values||[])).map(fmt).join(String(sep)),insert:(t,v)=>{if(Array.isArray(t))t.push(v);else t?.values?.push(v)},remove:(t,i)=>Array.isArray(t)?t.splice(Number(i)-1,1)[0]:null,create:(n,v)=>Array.from({length:Number(n)},()=>v)};
-    env.bit32={bxor:(...a)=>a.reduce((x,y)=>(x^Number(y))>>>0,0),band:(...a)=>a.reduce((x,y)=>(x&Number(y))>>>0,0xffffffff),bor:(...a)=>a.reduce((x,y)=>(x|Number(y))>>>0,0)};
-    env.task={wait:(n=0)=>{call('task.wait',[n],Number(n)||0,'runtime');return Number(n)||0},spawn:(fn)=>{call('task.spawn',[fn],'<thread>','event');if(fn)queued.push(()=>fn?.__kind==='LuaFunction'?invokeLua(fn,[]):typeof fn==='function'?fn():null);return {__kind:'thread'}},defer:(fn)=>{call('task.defer',[fn],'<thread>','event');if(fn)queued.push(()=>fn?.__kind==='LuaFunction'?invokeLua(fn,[]):typeof fn==='function'?fn():null);return {__kind:'thread'}},delay:(n,fn)=>{call('task.delay',[n,fn],'<thread>','event');if(fn)queued.push(()=>fn?.__kind==='LuaFunction'?invokeLua(fn,[]):typeof fn==='function'?fn():null);return {__kind:'thread'}},desynchronize:()=>call('task.desynchronize',[],null,'runtime'),synchronize:()=>call('task.synchronize',[],null,'runtime')};env.wait=env.task.wait;env.spawn=env.task.spawn;
-    env.pcall=(fn,...a)=>{try{return [true,invokeLua(fn,a)]}catch(e){return [false,e.message]}};env.xpcall=env.pcall;env.assert=(v,m)=>{if(!truth(v))throw Error(m||'assertion failed');return v};
-    env.pairs=(t)=>{if(Array.isArray(t))return t.map((v,i)=>[i,v]);if(t?.__children)return t.__children.map((v,i)=>[i+1,v]);if(t&&typeof t==='object')return Object.entries(t).map(([k,v])=>[k,v]);return []};
-    env.ipairs=(t)=>Array.isArray(t)?t.map((v,i)=>[i+1,v]):t?.__children?t.__children.map((v,i)=>[i+1,v]):[];
-    env.require=(m)=>{const mod={__kind:'ModuleScript',Name:fmt(m),name:fmt(m),Parent:null,scriptable:true};call('require',[m],mod,'library');return mod};
-    env.base64={decode:s=>{try{return atob(String(s).replace(/-/g,'+').replace(/_/g,'/'))}catch{return null}}};
-    env.crypt={base64decode:env.base64.decode,xor:(s,k)=>{const z=String(s),key=String(k),o=[];for(let i=0;i<z.length;i++)o.push(String.fromCharCode(z.charCodeAt(i)^key.charCodeAt(i%Math.max(1,key.length))));return o.join('')}};
+    env.Vector2.zero=env.Vector2(0,0);env.Vector3.zero=env.Vector3(0,0,0);
+    env.Color3={new:(r=0,g=0,b=0)=>({__kind:'Color3',R:Number(r),G:Number(g),B:Number(b)}),fromRGB:(r=0,g=0,b=0)=>({__kind:'Color3',R:Number(r)/255,G:Number(g)/255,B:Number(b)/255}),fromHSV:(h,s,v)=>{h=Number(h);s=Number(s);v=Number(v);let i=Math.floor(h*6),f=h*6-i,p=v*(1-s),q=v*(1-f*s),t=v*(1-(1-f)*s),m=[[v,t,p],[q,v,p],[p,v,t],[p,q,v],[t,p,v],[v,p,q]][i%6];return {__kind:'Color3',R:m[0],G:m[1],B:m[2]};}};
+    env.UDim={new:(s=0,o=0)=>({__kind:'UDim',Scale:Number(s),Offset:Number(o)})};env.UDim2={new:(a=0,b=0,c=0,d=0)=>({__kind:'UDim2',X:{Scale:Number(a),Offset:Number(b)},Y:{Scale:Number(c),Offset:Number(d)}}),fromScale:(x,y)=>({__kind:'UDim2',X:{Scale:Number(x),Offset:0},Y:{Scale:Number(y),Offset:0}}),fromOffset:(x,y)=>({__kind:'UDim2',X:{Scale:0,Offset:Number(x)},Y:{Scale:0,Offset:Number(y)}})};
+    env.CFrame={new:(...a)=>({__kind:'CFrame',args:a}),Angles:(...a)=>({__kind:'CFrame',args:a})};env.Ray=new Proxy({}, {get:()=>()=>({__kind:'Ray'})});
+    env.type=v=>v==null?'nil':(v.__kind==='Instance'||v.__kind==='Service'?'Instance':v.__kind==='table'?'table':typeof v);env.typeof=env.type;env.tostring=fmt;env.tonumber=(v,b)=>{const n=b?parseInt(String(v),Number(b)):Number(v);return Number.isFinite(n)?n:null};
+    env.select=(n,...a)=>n==='#'?a.length:a[Number(n)-1];env.rawget=(o,k)=>o?.[k];env.rawset=(o,k,v)=>{if(o)o[k]=v;return o};
+    env.math={floor:Math.floor,ceil:Math.ceil,abs:Math.abs,max:Math.max,min:Math.min,clamp:(x,a,b)=>Math.max(a,Math.min(b,x)),sqrt:Math.sqrt,pow:Math.pow,pi:Math.PI,random:(a,b)=>a==null?Math.random():b==null?1+Math.floor(Math.random()*Number(a)):Number(a)+Math.floor(Math.random()*(Number(b)-Number(a)+1)),randomseed:()=>null};
+    env.string={char:(...a)=>String.fromCodePoint(...a.map(Number)),byte:(s,a=1,b=a)=>{const out=[];for(let i=Number(a);i<=Number(b);i++)out.push(String(s).charCodeAt(i-1));return out.length<=1?out[0]:out},reverse:s=>String(s).split('').reverse().join(''),rep:(s,n)=>String(s).repeat(Math.max(0,Math.min(100000,Number(n)||0))),sub:(s,a,b)=>String(s).substring(Number(a)-1,b==null?undefined:Number(b)),lower:s=>String(s).toLowerCase(),upper:s=>String(s).toUpperCase(),find:(s,p)=>{const i=String(s).indexOf(String(p));return i<0?null:i+1},format:(fmt,...a)=>{let i=0;return String(fmt??'').replace(/%[sdif]/g,()=>String(a[i++]??''))},match:(s,p)=>{const m=String(s).match(new RegExp(String(p)));return m?.[0]||null},gsub:(s,p,r)=>String(s).replace(new RegExp(String(p),'g'),String(r))};
+    env.table={concat:(t,sep='')=>(Array.isArray(t)?t:(t?.values||[])).map(fmt).join(String(sep)),insert:(t,v)=>{if(Array.isArray(t))t.push(v);else t?.values?.push(v)},remove:(t,i)=>Array.isArray(t)?t.splice(Number(i)-1,1)[0]:null,create:(n,v)=>Array.from({length:Number(n)},()=>v),sort:(t,fn)=>{if(Array.isArray(t))t.sort((a,b)=>{if(fn?.__kind==='LuaFunction')return Number(invokeLua(fn,[a,b])||0);if(typeof fn==='function')return Number(fn(a,b)||0);return String(a).localeCompare(String(b));});return t}};
+    env.bit32={bxor:(...a)=>a.reduce((x,y)=>(x^Number(y))>>>0,0),band:(...a)=>a.reduce((x,y)=>(x&Number(y))>>>0,0xffffffff),bor:(...a)=>a.reduce((x,y)=>(x|Number(y))>>>0,0),bnot:x=>(~Number(x))>>>0,lshift:(x,n)=>(Number(x)<<Number(n))>>>0,rshift:(x,n)=>(Number(x)>>>Number(n))>>>0};
+    env.task={wait:(n=0)=>{call('task.wait',[n],Number(n)||0,'runtime');return Number(n)||0},spawn:fn=>{call('task.spawn',[fn],'<thread>','event');if(fn)queued.push(()=>invokeCallable(fn,[]));return {__kind:'thread'}},defer:fn=>{call('task.defer',[fn],'<thread>','event');if(fn)queued.push(()=>invokeCallable(fn,[]));return {__kind:'thread'}},delay:(n,fn)=>{call('task.delay',[n,fn],'<thread>','event');if(fn)queued.push(()=>invokeCallable(fn,[]));return {__kind:'thread'}},desynchronize:()=>call('task.desynchronize',[],null,'runtime'),synchronize:()=>call('task.synchronize',[],null,'runtime')};env.wait=env.task.wait;env.spawn=env.task.spawn;
+    env.os={clock:()=>performance.now()/1000,time:()=>Date.now()/1000,date:()=>new Date().toISOString()};env.tick=()=>Date.now()/1000;env.time=env.tick;
+    env.pcall=(fn,...a)=>{try{return [true,invokeCallable(fn,a)]}catch(e){return [false,e?.message||String(e)]}};env.xpcall=env.pcall;env.assert=(v,m)=>{if(!truth(v))throw Error(m||'assertion failed');return v};
+    env.pairs=t=>{if(t?.__children)return t.__children.map((v,i)=>[i+1,v]);if(Array.isArray(t))return t.map((v,i)=>[i+1,v]);if(t&&typeof t==='object')return Object.entries(t).filter(([k])=>!k.startsWith('__')).map(([k,v])=>[k,v]);return []};
+    env.ipairs=t=>Array.isArray(t)?t.map((v,i)=>[i+1,v]):t?.__children?t.__children.map((v,i)=>[i+1,v]):[];
+    env.next=(t,k)=>{const xs=env.pairs(t);const idx=xs.findIndex(x=>x[0]===k);return xs[idx+1]||null};
+    env.setmetatable=(o,m)=>{if(o)o.__metatable=m;return o};env.getmetatable=o=>o?.__metatable||null;
+    env.clone=env.cloneref=v=>{call('cloneref',[v],v,'runtime');return v};env.gethui=()=>{call('gethui',[],services.CoreGui,'environment');return services.CoreGui};
+    env.getconnections=s=>{call('getconnections',[s],[], 'environment');return s?._handlers?.map(fn=>({Function:fn,Enabled:true,Disable(){this.Enabled=false},Enable(){this.Enabled=true}}))||[]};
+    env.identifyexecutor=()=>{call('identifyexecutor',[],['Qyrex','Local Runtime'],'environment');return 'Qyrex Local Runtime'};
+    env.getexecutorname=env.identifyexecutor;
+    env.request=(opts)=>{call('request',[opts],{StatusCode:200,StatusMessage:'Simulated',Body:''},'network');return {StatusCode:200,StatusMessage:'Simulated',Body:'',Headers:{},Success:true};};env.http_request=env.request;
+    env.getgenv=()=>{call('getgenv',[],env,'environment');return env};env.getrenv=()=>{call('getrenv',[],env,'environment');return env};env.getfenv=()=>{call('getfenv',[],env,'environment');return env};
 
-    function parsePath(s){
-      const m=/^([A-Za-z_][\w]*)(.*)$/.exec(s.trim());if(!m)return null;const parts=[];let r=m[2];
-      while(r){let x=/^\.([A-Za-z_]\w*)/.exec(r);if(x){parts.push({type:'prop',key:x[1]});r=r.slice(x[0].length);continue}x=/^\[([\s\S]+?)\]/.exec(r);if(x){parts.push({type:'index',expr:x[1]});r=r.slice(x[0].length);continue}break;}
-      return {base:m[1],parts};
-    }
-    function getPath(s,localEnv){const p=parsePath(s);if(!p)return null;let v=localEnv&&Object.prototype.hasOwnProperty.call(localEnv,p.base)?localEnv[p.base]:env[p.base];for(const part of p.parts){if(v==null)return null;v=part.type==='prop'?v[part.key]:v[evalx(part.expr,localEnv)]}return v}
-    function setPath(s,value){const p=parsePath(s);if(!p)return false; if(!p.parts.length){env[p.base]=value;return true;} let o=env[p.base];for(let i=0;i<p.parts.length-1;i++){if(o==null)return false;o=p.parts[i].type==='prop'?o[p.parts[i].key]:o[evalx(p.parts[i].expr)]}const last=p.parts.at(-1);if(o==null)return false;if(last.type==='prop')setProp(o,last.key,value);else o[evalx(last.expr)]=value;return true;}
+    function toPlain(v,seen=new WeakSet()){if(v==null||typeof v==='string'||typeof v==='number'||typeof v==='boolean')return v;if(typeof v==='function')return '<function>';if(typeof v==='object'){if(seen.has(v))return '<circular>';seen.add(v);if(v.__kind==='Instance')return {ClassName:v.ClassName,Name:v.Name,FullName:fullName(v)};if(Array.isArray(v))return v.map(x=>toPlain(x,seen));const o={};for(const [k,x] of Object.entries(v))if(!k.startsWith('__')&&typeof x!=='function')o[k]=toPlain(x,seen);return o;}return String(v);}
+    function moduleFor(key){const k=fmt(key);if(moduleCache.has(k))return moduleCache.get(k);const m=libraryObject(`Module:${k}`);m.__kind='Library';m.Source=k;moduleCache.set(k,m);call('require',[key],m,'library');return m;}
 
-    function makeLuaFunction(params,body,name='anonymous',closure=env){
-      return {__kind:'LuaFunction',name,params:String(params||'').split(',').map(x=>x.trim()).filter(Boolean),body:String(body||''),__callDepth:0,__closure:closure||env};
+    function parsePath(s){const m=/^([A-Za-z_]\w*)(.*)$/.exec(String(s||'').trim());if(!m)return null;const parts=[];let r=m[2];while(r){let x=/^\.([A-Za-z_]\w*)/.exec(r);if(x){parts.push({type:'prop',key:x[1]});r=r.slice(x[0].length);continue}x=/^\[([\s\S]+?)\]/.exec(r);if(x){parts.push({type:'index',expr:x[1]});r=r.slice(x[0].length);continue}break}return {base:m[1],parts};}
+    function lookup(name,scope){const p=parsePath(name);if(!p)return null;let v=Object.prototype.hasOwnProperty.call(scope,p.base)?scope[p.base]:env[p.base];for(const part of p.parts){if(v==null)return null;v=part.type==='prop'?v[part.key]:v[evalx(part.expr,scope)];}return v;}
+    function assignPath(path,value,scope){const p=parsePath(path);if(!p)return false;if(!p.parts.length){scope[p.base]=value;return true;}let o=Object.prototype.hasOwnProperty.call(scope,p.base)?scope[p.base]:env[p.base];for(let i=0;i<p.parts.length-1;i++){if(o==null)return false;o=p.parts[i].type==='prop'?o[p.parts[i].key]:o[evalx(p.parts[i].expr,scope)];}if(o==null)return false;const last=p.parts.at(-1);if(last.type==='prop')setProp(o,last.key,value);else o[evalx(last.expr,scope)]=value;return true;}
+
+    function makeLuaFunction(params,body,name='anonymous',closure=env,native=null){return {__kind:'LuaFunction',name,params:String(params||'').split(',').map(x=>x.trim()).filter(Boolean),body:String(body||''),closure:closure||env,depth:0,native};}
+    function captureFunction(text,start=0,closure=env){const head=/^function\s*(?:[A-Za-z_]\w*(?::[A-Za-z_]\w*)?\s*)?\(([^)]*)\)/.exec(text.slice(start));if(!head)return null;const bodyStart=start+head[0].length;let depth=1,q=null,e=false;for(let i=bodyStart;i<text.length;){const c=text[i];if(q){if(e){e=false;i++;continue}if(c==='\\'){e=true;i++;continue}if(c===q)q=null;i++;continue}if(c==='"'||c==="'"){q=c;i++;continue}if(c==='-'&&text[i+1]==='-'){const nl=text.indexOf('\n',i+2);i=nl<0?text.length:nl+1;continue}const m=/^(function|if|for|while|repeat|do|end|until)\b/.exec(text.slice(i));if(m){if(['function','if','for','while','repeat','do'].includes(m[1]))depth++;else{depth--;if(depth===0)return {fn:makeLuaFunction(head[1],text.slice(bodyStart,i),'anonymous',closure),end:i};}i+=m[1].length;continue}i++;}return null;}
+
+    function evalTable(s,scope){const inside=s.trim().slice(1,-1);const obj={__kind:'table',__table:true,values:[],fields:Object.create(null)};for(const part of splitTop(inside)){const eq=findTopOp(part,['=']) ;if(eq){const keyRaw=part.slice(0,eq[0]).trim().replace(/^\[|\]$/g,'');const key=unquote(keyRaw)??keyRaw;const val=evalx(part.slice(eq[0]+1),scope);obj.fields[key]=val;obj[key]=val;}else{const val=evalx(part,scope);obj.values.push(val);obj[obj.values.length]=val;}}return obj;}
+    function invokeCallable(fn,args){if(fn?.__kind==='LuaFunction')return invokeLua(fn,args);if(typeof fn==='function')return fn(...args);return null;}
+    function invokeMethod(obj,method,args){if(obj&&typeof obj[method]==='function')return obj[method](...args);if(obj&&obj[method]!=null)return obj[method];call(`${fmt(obj)}:${method}`,args,null,'runtime');return null;}
+    function invoke(name,args,scope){
+      tick();name=String(name).trim();
+      if(name==='print'){const s=args.map(fmt).join('\t');push(stdout,s);call('print',args,null,'print');return null;}
+      if(name==='warn'){const s=args.map(fmt).join('\t');push(stderr,s);call('warn',args,null,'warn');return null;}
+      if(name==='error'){const s='error: '+args.map(fmt).join('\t');push(stderr,s);call('error',args,null,'error');return null;}
+      if(name==='require')return moduleFor(args[0]);
+      if(name==='loadstring'||name==='load'){const source=typeof args[0]==='string'?args[0]:'';let fn;if(source&&/\b(?:local|function|return|print|warn|Instance\.new|game[.:])\b/.test(source))fn=makeLuaFunction([],source,'loadstring',scope);else fn=makeLuaFunction([],source,'loadstring',scope,(...aa)=>{call('loadstring:invoke',aa,null,'runtime');return libraryObject('LoadedLibrary')});call(name,args,fn,'runtime');return fn;}
+      if(name==='getgenv'||name==='getfenv'||name==='getrenv')return env[name]();
+      if(name==='setclipboard'){call('setclipboard',args,null,'environment');return null;}
+      if(name.includes(':')){const z=name.split(/:(.+)/),obj=evalx(z[0],scope);return invokeMethod(obj,z[1],args);}
+      const f=lookup(name,scope);if(f?.__kind==='LuaFunction')return invokeLua(f,args);if(typeof f==='function')return f(...args);
+      call(name,args,null,'runtime');return null;
     }
-    function captureFunction(text,startIndex,closure){
-      const head=/^function\s*(?:\w+\s*)?\(([^)]*)\)/.exec(text.slice(startIndex));
-      if(!head)return null;
-      const bodyStart=startIndex+head[0].length;
-      let depth=1,q=null,e=false,i=bodyStart;
-      for(;i<text.length;){
-        const c=text[i];
-        if(q){if(e){e=false;i++;continue}if(c==='\\'){e=true;i++;continue}if(c===q)q=null;i++;continue}
-        if(c==='"'||c==="'"){q=c;i++;continue}
-        if(c==='-'&&text[i+1]==='-'){const nl=text.indexOf('\\n',i+2);i=nl<0?text.length:nl+1;continue}
-        if(/[A-Za-z_]/.test(c)){
-          const m=/^([A-Za-z_]\w*)/.exec(text.slice(i));
-          if(m){const w=m[1];if(['function','if','for','while','repeat'].includes(w))depth++;else if(w==='end'||w==='until'){depth--;if(depth===0)return {fn:makeLuaFunction(head[1],text.slice(bodyStart,i),'anonymous',closure||env),end:i+w.length};}i+=w.length;continue;}
-        }
-        i++;
-      }
-      return null;
+    function invokeLua(fn,args){if(!fn)return null;if(fn.native)return fn.native(...args);if(fn.depth>=MAX_CALL_DEPTH)throw Error('Lua callback depth limit reached');fn.depth++;const scope=Object.create(fn.closure||env);fn.params.forEach((p,i)=>{scope[p]=args[i]??null});scope.__vararg=args.slice(fn.params.length);let r=null;try{r=executeSource(fn.body,scope);}finally{fn.depth--;}return r?.returnValue??null;}
+
+    function evalx(expr,scope=env){
+      tick();let s=strip(expr);if(!s)return null;
+      const uq=unquote(s);if(uq!==null)return uq;
+      if(s==='true')return true;if(s==='false')return false;if(s==='nil')return null;if(s==='...')return scope.__vararg||[];
+      if(/^[-+]?0x[0-9a-f]+$/i.test(s))return parseInt(s,16);if(/^[-+]?\d+(?:\.\d+)?$/.test(s))return Number(s);
+      if(s.startsWith('#')){const v=evalx(s.slice(1),scope);return Array.isArray(v)?v.length:(v?.values?.length??Object.keys(v?.fields||{}).length);}
+      if(/^function\b/.test(s)){const c=captureFunction(s,0,scope);return c?.fn||makeLuaFunction([],s,'anonymous',scope);}
+      if(s[0]==='{'&&s.endsWith('}'))return evalTable(s,scope);
+      if(s.startsWith('not '))return !truth(evalx(s.slice(4),scope));if(s.startsWith('-'))return -Number(evalx(s.slice(1),scope));if(s.startsWith('~'))return (~Number(evalx(s.slice(1),scope)))>>>0;
+      for(const ops of [[' or '],[' and '],['==','~=','<=','>=','<','>'],['..'],['+','-'],['*','/','%']]){const z=findTopOp(s,ops);if(z){const a=evalx(s.slice(0,z[0]),scope),b=evalx(s.slice(z[0]+z[1].length),scope);switch(z[1]){case'or':return truth(a)?a:b;case'and':return truth(a)?b:a;case'==':return a===b;case'~=':return a!==b;case'<=':return a<=b;case'>=':return a>=b;case'<':return a<b;case'>':return a>b;case'..':return String(a??'nil')+String(b??'nil');case'+':return Number(a)+Number(b);case'-':return Number(a)-Number(b);case'*':return Number(a)*Number(b);case'/':return Number(a)/Number(b);case'%':return Number(a)%Number(b);}}}
+      // method/call chain: resolve the first call and then consume chained members/calls
+      const callPos=s.indexOf('(');
+      if(callPos>0){const close=balanced(s.slice(callPos),'(',')');if(close>=0){const head=s.slice(0,callPos).trim();const inner=s.slice(callPos+1,callPos+close);const vals=splitTop(inner).map(x=>evalx(x,scope));let value=invoke(head,vals,scope);let rest=s.slice(callPos+1+close).trim();while(rest){let m=/^\.([A-Za-z_]\w*)/.exec(rest);if(m){value=value==null?null:value[m[1]];rest=rest.slice(m[0].length).trim();continue}m=/^:([A-Za-z_]\w*)\(/.exec(rest);if(m){const p=balanced(rest.slice(m[0].length-1),'(',')');if(p<0)break;const argsText=rest.slice(m[0].length,m[0].length-1+p);value=invokeMethod(value,m[1],splitTop(argsText).map(x=>evalx(x,scope)));rest=rest.slice(m[0].length-1+p+1).trim();continue}m=/^\(([^)]*)\)/.exec(rest);if(m){value=invokeCallable(value,splitTop(m[1]).map(x=>evalx(x,scope)));rest=rest.slice(m[0].length).trim();continue}m=/^\[([\s\S]+?)\]/.exec(rest);if(m){value=value==null?null:value[evalx(m[1],scope)];rest=rest.slice(m[0].length).trim();continue}break}return value;}}
+      const v=lookup(s,scope);return v===undefined?null:v;
     }
-    function logicalStatements(src){
-      const lines=String(src||'').replace(/\r/g,'').split('\n');const out=[];let buf='',paren=0,brace=0,bracket=0,fnDepth=0,q=null,e=false;
-      const update=(line)=>{
-        let i=0;while(i<line.length){const c=line[i];
-          if(q){if(e){e=false;i++;continue}if(c==='\\'){e=true;i++;continue}if(c===q)q=null;i++;continue}
-          if(c==='"'||c==="'"){q=c;i++;continue}
-          if(c==='-'&&line[i+1]==='-')break;
-          if(c==='(')paren++;else if(c===')')paren=Math.max(0,paren-1);else if(c==='{')brace++;else if(c==='}')brace=Math.max(0,brace-1);else if(c==='[')bracket++;else if(c===']')bracket=Math.max(0,bracket-1);
-          if(/[A-Za-z_]/.test(c)){const m=/^([A-Za-z_]\w*)/.exec(line.slice(i));if(m){const w=m[1];if(w==='function')fnDepth++;else if(w==='end'&&fnDepth>0)fnDepth--;else if(w==='until'&&fnDepth>0)fnDepth--;i+=w.length;continue}}
-          i++;
-        }
-      };
-      for(const raw of lines){
-        const line=raw.trim();if(!buf&&!line)continue;buf+=(buf?'\n':'')+raw;update(raw);
-        const clean=buf.replace(/--[^\n]*$/gm,'').trim();
-        if(paren===0&&brace===0&&bracket===0&&fnDepth===0){if(clean){out.push(clean);buf='';}}
-      }
+
+    function logicalLines(src){
+      const raw=String(src||'').replace(/\r/g,'').split('\n'),out=[];let buf='',p=0,b=0,a=0,q=null,e=false,blocks=0;
+      const scan=line=>{for(let i=0;i<line.length;i++){const c=line[i];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"){q=c;continue}if(c==='-'&&line[i+1]==='-')break;if(c==='(')p++;else if(c===')')p=Math.max(0,p-1);else if(c==='{')b++;else if(c==='}')b=Math.max(0,b-1);else if(c==='[')a++;else if(c===']')a=Math.max(0,a-1);const m=/^[A-Za-z_]\w*/.exec(line.slice(i));if(m){const w=m[0];if(['if','for','while','function','do','repeat'].includes(w))blocks++;if(['end','until'].includes(w))blocks=Math.max(0,blocks-1);i+=w.length-1;}}};
+      for(const rawLine of raw){const line=rawLine.trim();if(!buf&&!line)continue;buf+=(buf?'\n':'')+rawLine;scan(rawLine);const clean=buf.replace(/--[^\n]*$/gm,'').trim();if(p===0&&b===0&&a===0&&blocks===0&&clean){out.push(clean);buf='';}}
       if(buf.trim())out.push(buf.trim());return out;
     }
-    function splitStatements(src){
-      const text=String(src||'').replace(/\r/g,'');const out=[];let st=0,paren=0,brace=0,bracket=0,q=null,e=false;
-      for(let i=0;i<text.length;i++){
-        const c=text[i];
-        if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}
-        if(c==='"'||c==="'"){q=c;continue}
-        if(c==='(')paren++;else if(c===')')paren=Math.max(0,paren-1);else if(c==='{')brace++;else if(c==='}')brace=Math.max(0,brace-1);else if(c==='[')bracket++;else if(c===']')bracket=Math.max(0,bracket-1);
-        if((c==='\n'||c===';')&&paren===0&&brace===0&&bracket===0){const part=text.slice(st,i).trim();if(part)out.push(part);st=i+1;}
-      }
-      const tail=text.slice(st).trim();if(tail)out.push(tail);return out;
-    }
-    function findBlockEnd(lines,start){
-      let depth=0;
-      for(let i=start;i<lines.length;i++){
-        const l=lines[i].replace(/--.*$/,'').trim();
-        if(/^(local\s+)?function\b/.test(l)||/^function\b/.test(l)||/^(if|for|while|repeat)\b/.test(l))depth++;
-        if(/^end\b/.test(l)){depth--;if(depth<=0)return i;}
-      }
-      return lines.length-1;
-    }
-    function evalTable(s){
-      const inside=s.trim().slice(1,-1);const values=splitTop(inside,',').map(evalx);return {__kind:'table',values,__table:true};
-    }
-    function evalx(expr,localEnv){
-      tick();expr=strip(String(expr||'').trim());if(!expr)return null;
-      const uq=unquote(expr);if(uq!==null)return uq;if(expr==='true')return true;if(expr==='false')return false;if(expr==='nil')return null;
-      if(expr==='...')return localEnv?.__vararg||[];
-      if(/^#/.test(expr)) return (()=>{const v=evalx(expr.slice(1),localEnv);return Array.isArray(v)?v.length:(v?.values?.length||String(v??'').length)})();
-      if(/^[-+]?0x[0-9a-f]+$/i.test(expr))return parseInt(expr,16);if(/^[-+]?\d+(?:\.\d+)?$/.test(expr))return Number(expr);
-      if(/^function\b/.test(expr)){const cap=captureFunction(expr,0);return cap?.fn||makeLuaFunction([],expr,'anonymous',localEnv||env);}
-      if(expr[0]==='{'&&expr.endsWith('}'))return evalTable(expr);
-      if(expr.startsWith('not '))return !truth(evalx(expr.slice(4),localEnv));
-      if(expr[0]==='-')return -Number(evalx(expr.slice(1),localEnv));
-      for(const ops of [[' or '],[' and '],['==','~=','<=','>=','<','>'],['..'],['+','-'],['*','/','%']]){const z=findTopOp(expr,ops);if(z){const a=evalx(expr.slice(0,z[0]),localEnv),b=evalx(expr.slice(z[0]+z[1].length),localEnv);switch(z[1]){case'or':return truth(a)?a:b;case'and':return truth(a)?b:a;case'==':return a===b;case'~=':return a!==b;case'<=':return a<=b;case'>=':return a>=b;case'<':return a<b;case'>':return a>b;case'..':return String(a)+String(b);case'+':return Number(a)+Number(b);case'-':return Number(a)-Number(b);case'*':return Number(a)*Number(b);case'/':return Number(a)/Number(b);case'%':return Number(a)%Number(b);}}}
-      const callPos=expr.indexOf('(');
-      if(callPos>0){const close=balanced(expr.slice(callPos),'(',')');if(close>=0){const head=expr.slice(0,callPos).trim();const inner=expr.slice(callPos+1,callPos+close);const vals=splitTop(inner).map(x=>evalx(x,localEnv));let value=invoke(head,vals,localEnv);let rest=expr.slice(callPos+1+close).trim();
-          while(rest){
-            let m=/^\(/.exec(rest);
-            if(m){const p=balanced(rest,'(',')');if(p<0)break;const body=rest.slice(1,p);value=value?.__kind==='LuaFunction'?invokeLua(value,splitTop(body).filter(Boolean).map(x=>evalx(x,localEnv)),localEnv):(typeof value==='function'?value(...splitTop(body).filter(Boolean).map(x=>evalx(x,localEnv))):null);rest=rest.slice(p+1).trim();continue}
-            m=/^:([A-Za-z_]\w*)\(/.exec(rest);if(m){const p=balanced(rest.slice(m[0].length-1),'(',')');if(p<0)break;const body=rest.slice(m[0].length, m[0].length-1+p);value=invokeMethod(value,m[1],splitTop(body).map(x=>evalx(x,localEnv)));rest=rest.slice(m[0].length-1+p+1).trim();continue}
-            m=/^\.([A-Za-z_]\w*)/.exec(rest);if(m){value=value==null?null:value[m[1]];rest=rest.slice(m[0].length).trim();continue}
-            m=/^\[([\s\S]+?)\]/.exec(rest);if(m){value=value==null?null:value[evalx(m[1],localEnv)];rest=rest.slice(m[0].length).trim();continue}
-            break
-          }
-          return value;}}
-      if(localEnv&&Object.prototype.hasOwnProperty.call(localEnv,expr))return localEnv[expr];
-      const p=getPath(expr,localEnv);return p!==null?p:null;
-    }
-    function invokeMethod(obj,method,argsv){
-      if(obj&&typeof obj[method]==='function')return obj[method](...argsv);
-      if(obj&&obj[method]!=null)return obj[method];
-      call(`${fmt(obj)}:${method}`,argsv,null,'runtime');return null;
-    }
-    function invoke(name,argsv,localEnv){
-      tick();name=String(name).trim();
-      if(name==='print'){const s=argsv.map(fmt).join('\t');push(stdout,s);call('print',argsv,null,'print');return null}
-      if(name==='warn'){const s=argsv.map(fmt).join('\t');push(stderr,s);call('warn',argsv,null,'warn');return null}
-      if(name==='error'){const s='error: '+argsv.map(fmt).join('\t');push(stderr,s);call('error',argsv,null,'error');return null}
-      if(name==='loadstring'||name==='load'){const f=makeLuaFunction([],typeof argsv[0]==='string'?argsv[0]:'','loadstring');call(name,argsv,f,'runtime');return f}
-      if(name==='getgenv'||name==='getfenv'||name==='getrenv'){call(name,argsv,env,'environment');return env}
-      const f=getPath(name,localEnv);if(typeof f==='function')return f(...argsv);
-      if(f&&f.__kind==='LuaFunction')return invokeLua(f,argsv,localEnv);
-      if(name.includes(':')){const z=name.split(/:(.+)/),obj=evalx(z[0],localEnv);return invokeMethod(obj,z[1],argsv)}
-      call(name,argsv,null,'runtime');return null;
-    }
-    function invokeLua(fn,argsv){
-      if(!fn)return null;if(fn.__kind==='function')return typeof fn==='function'?fn(...argsv):null;
-      if(fn.__kind!=='LuaFunction')return null;if(fn.__callDepth>=MAXCALLDEPTH)throw Error('Lua callback depth limit reached');
-      fn.__callDepth++;const scope=Object.create(fn.__closure||env);fn.params.forEach((p,i)=>{scope[p]=argsv[i]});scope.__vararg=argsv.slice(fn.params.length);
-      let result=null;try{result=executeSource(fn.body,scope);}finally{fn.__callDepth--;}return result?.returnValue??null;
-    }
-    function cleanRuntimeLine(line){
-      let s=String(line??'');let q=null,e=false;for(let i=0;i<s.length;i++){const c=s[i];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"){q=c;continue}if(c==='-'&&s[i+1]==='-')return s.slice(0,i).trim();}return s.trim();
-    }
-    function runtimeLines(src){
-      const raw=String(src||'').replace(/\r/g,'').split('\n');const out=[];
-      for(const row of raw){const line=cleanRuntimeLine(row);if(!line){out.push('');continue}let parts=splitStatements(line);if(parts.length<=1)out.push(line);else out.push(...parts);}
-      return out;
-    }
-    function findRuntimeBlockEnd(lines,start){
-      let depth=0;
-      for(let i=start;i<lines.length;i++){
-        const l=cleanRuntimeLine(lines[i]).trim();if(!l)continue;
-        if(/^(?:local\s+)?function\b/.test(l)||/^if\b.*\bthen\s*$/.test(l)||/^for\b.*\bdo\s*$/.test(l)||/^while\b.*\bdo\s*$/.test(l)||/^repeat\b/.test(l)||/^do\s*$/.test(l)) depth++;
-        if(/^end\b/.test(l)){depth--;if(depth===0)return i;}
-        if(/^until\b/.test(l)&&depth>0){depth--;if(depth===0)return i;}
-      }
-      return lines.length-1;
-    }
-    function executeIf(lines,i,scope){
-      const end=findRuntimeBlockEnd(lines,i);let depth=0,elseAt=-1,branches=[{at:i,cond:cleanRuntimeLine(lines[i]).replace(/^if\s+/,'').replace(/\s+then\s*$/,'')}];
-      for(let j=i+1;j<end;j++){const l=cleanRuntimeLine(lines[j]);if(/^(?:local\s+)?function\b/.test(l)||/^if\b.*\bthen\s*$/.test(l)||/^for\b.*\bdo\s*$/.test(l)||/^while\b.*\bdo\s*$/.test(l)||/^repeat\b/.test(l)||/^do\s*$/.test(l))depth++;if(/^end\b/.test(l))depth--;if(depth===0&&/^elseif\b/.test(l))branches.push({at:j,cond:l.replace(/^elseif\s+/,'').replace(/\s+then\s*$/,'')});if(depth===0&&/^else\s*$/.test(l))elseAt=j;}
-      let rv=null,ran=false;for(let k=0;k<branches.length;k++){const b=branches[k],next=branches[k+1]?.at??(elseAt>=0?elseAt:end);if(truth(evalx(b.cond,scope))){rv=executeLines(lines,b.at+1,next-1,scope);ran=true;break}}if(!ran&&elseAt>=0)rv=executeLines(lines,elseAt+1,end-1,scope);return {end,didReturn:Boolean(rv?.didReturn),returnValue:rv?.returnValue??null};
-    }
-    function executeLoopBody(lines,start,end,scope,state){const r=executeLines(lines,start,end,scope);if(r.didBreak)state.break=true;return r;}
-    function assignLoopVars(names,values,scope){names.forEach((n,i)=>{scope[n.trim()]=values[i]??null});}
-    function executeLines(lines,start=0,end=lines.length-1,scope=env){
-      let returnValue=null,didReturn=false,didBreak=false;
-      for(let i=start;i<=end;i++){
-        tick();currentLine=i+1;let line=cleanRuntimeLine(lines[i]);if(!line)continue;
-        if(/^if\b/.test(line)){const r=executeIf(lines,i,scope);i=r.end;if(r.didReturn){returnValue=r.returnValue;didReturn=true;break}continue;}
-        if(/^repeat\b/.test(line)){const blockEnd=findRuntimeBlockEnd(lines,i),untilLine=cleanRuntimeLine(lines[blockEnd]);let guard=0;do{const r=executeLines(lines,i+1,blockEnd-1,scope);if(r.didReturn){returnValue=r.returnValue;didReturn=true;break}if(r.didBreak){didBreak=true;break}guard++;if(guard>1000)throw Error('repeat loop limit reached');}while(!truth(evalx(untilLine.replace(/^until\s+/,''),scope)));i=blockEnd;if(didReturn||didBreak)break;continue;}
-        let m=/^for\s+([A-Za-z_]\w*)\s*=\s*([\s\S]+?)\s*,\s*([\s\S]+?)(?:\s*,\s*([\s\S]+?))?\s+do\s*$/.exec(line);
-        if(m){const blockEnd=findRuntimeBlockEnd(lines,i),a=Number(evalx(m[2],scope))||0,b=Number(evalx(m[3],scope))||0,step=Number(m[4]?evalx(m[4],scope):1)||1;let guard=0;for(let v=a;step>=0?v<=b:v>=b;v+=step){scope[m[1]]=v;const r=executeLoopBody(lines,i+1,blockEnd-1,scope,{});if(r.didReturn){returnValue=r.returnValue;didReturn=true;break}guard++;if(guard>1000)throw Error('for loop limit reached')}i=blockEnd;if(didReturn)break;continue;}
-        m=/^for\s+([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s+in\s+([\s\S]+?)\s+do\s*$/.exec(line);
-        if(m){const blockEnd=findRuntimeBlockEnd(lines,i),vals=evalx(m[2],scope)||[],list=Array.isArray(vals)?vals:(vals?.__children||vals?.values||[]);for(const item of list){const pair=Array.isArray(item)?item:[item];assignLoopVars(m[1].split(','),pair,scope);const r=executeLines(lines,i+1,blockEnd-1,scope);if(r.didReturn){returnValue=r.returnValue;didReturn=true;break}if(r.didBreak)break}i=blockEnd;if(didReturn)break;continue;}
-        if(/^while\s+[\s\S]+\s+do\s*$/.test(line)){const blockEnd=findRuntimeBlockEnd(lines,i),cond=line.replace(/^while\s+/,'').replace(/\s+do\s*$/,'');let guard=0;while(truth(evalx(cond,scope))){const r=executeLines(lines,i+1,blockEnd-1,scope);if(r.didReturn){returnValue=r.returnValue;didReturn=true;break}if(r.didBreak)break;if(++guard>1000)throw Error('while loop limit reached')}i=blockEnd;if(didReturn)break;continue;}
-        if(/^do\s*$/.test(line)){const blockEnd=findRuntimeBlockEnd(lines,i),r=executeLines(lines,i+1,blockEnd-1,scope);i=blockEnd;if(r.didReturn){returnValue=r.returnValue;didReturn=true;break}continue;}
-        if(/^(?:local\s+)?function\s+/.test(line)){
-          const isLocal=/^local\s+function/.test(line),mh=/^(?:local\s+)?function\s+([A-Za-z_]\w*(?::[A-Za-z_]\w*)?)\s*\(([^)]*)\)\s*$/.exec(line);
-          if(mh){const blockEnd=findRuntimeBlockEnd(lines,i),fn=makeLuaFunction(mh[2],lines.slice(i+1,blockEnd).join('\n'),mh[1],scope);if(mh[1].includes(':')){const [base,method]=mh[1].split(':');const obj=getPath(base,scope)||env[base];if(obj)obj[method]=fn;}else scope[mh[1]]=fn;i=blockEnd;continue;}
-        }
-        if(/^break\b/.test(line)){didBreak=true;break;}
-        m=/^return\b(?:\s+([\s\S]+))?$/.exec(line);if(m){returnValue=m[1]?evalx(m[1],scope):null;didReturn=true;break;}
-        m=/^local\s+([A-Za-z_]\w*)(?:\s*=\s*([\s\S]+))?$/.exec(line);if(m){scope[m[1]]=m[2]?evalx(m[2],scope):null;continue;}
-        m=/^([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|\[[^\]]+\])*)\s*=\s*([\s\S]+)$/.exec(line);if(m){setPathInScope(m[1],evalx(m[2],scope),scope);continue;}
-        if(/^(?:end|elseif|else)\b/.test(line))continue;
-        evalx(line,scope);
-      }
-      return {didReturn,returnValue,didBreak};
-    }
-    function setPathInScope(path,value,scope){
-      const p=parsePath(path);if(!p)return false;if(!p.parts.length){scope[p.base]=value;return true}
-      let o=Object.prototype.hasOwnProperty.call(scope,p.base)?scope[p.base]:env[p.base];for(let i=0;i<p.parts.length-1;i++){if(o==null)return false;o=p.parts[i].type==='prop'?o[p.parts[i].key]:o[evalx(p.parts[i].expr)]}
-      if(o==null)return false;const last=p.parts.at(-1);if(last.type==='prop')setProp(o,last.key,value);else o[evalx(last.expr)]=value;return true;
-    }
-    function executeSource(src,scope=env){
-      const lines=runtimeLines(src);
-      return executeLines(lines,0,lines.length-1,scope);
-    }
+    function runtimeLines(src){const raw=String(src||'').replace(/\r/g,'').split('\n'),out=[];for(const r of raw){const l=cleanLine(r);if(!l){out.push('');continue}const ps=splitTop(l,';');out.push(...ps);}return out;}
+    function blockEnd(lines,start){let depth=0;for(let i=start;i<lines.length;i++){const l=cleanLine(lines[i]);if(/^(?:local\s+)?function\b|^if\b.*\bthen\s*$|^for\b.*\bdo\s*$|^while\b.*\bdo\s*$|^repeat\b|^do\s*$/.test(l))depth++;if(/^end\s*$/.test(l)){depth--;if(depth===0)return i;}if(/^until\b/.test(l)&&depth>0){depth--;if(depth===0)return i;}}return lines.length-1;}
     function compileLuau(src){
-      const source=String(src||'');const statements=logicalStatements(source);const diagnostics=[];
-      let q=null,e=false,paren=0,brace=0,bracket=0;for(let i=0;i<source.length;i++){const c=source[i];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"){q=c;continue}if(c==='(')paren++;else if(c===')')paren--;else if(c==='{')brace++;else if(c==='}')brace--;else if(c==='[')bracket++;else if(c===']')bracket--;if(paren<0||brace<0||bracket<0){diagnostics.push({severity:'error',message:'Unmatched delimiter near character '+i});break;}}
-      if(q)diagnostics.push({severity:'error',message:'Unterminated string literal'});if(paren||brace||bracket)diagnostics.push({severity:'error',message:'Unbalanced delimiters in source'});
-      const lines=source.split('\n');let blocks=0;for(const raw of lines){const l=cleanRuntimeLine(raw);if(/^(if|for|while|function|local\s+function|repeat|do)\b/.test(l))blocks++;if(/^end\b/.test(l))blocks--;if(/^until\b/.test(l))blocks--;if(blocks<0){diagnostics.push({severity:'error',message:'Unexpected end/until'});blocks=0;}}if(blocks>0)diagnostics.push({severity:'error',message:`${blocks} unclosed block${blocks===1?'':'s'}`});
-      return {statements,count:statements.length,source,diagnostics,ok:diagnostics.every(x=>x.severity!=='error')};
+      const source=String(src||''),statements=logicalLines(source),diagnostics=[];let p=0,b=0,a=0,q=null,e=false;
+      for(let i=0;i<source.length;i++){const c=source[i];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"){q=c;continue}if(c==='(')p++;else if(c===')')p--;else if(c==='{')b++;else if(c==='}')b--;else if(c==='[')a++;else if(c===']')a--;if(p<0||b<0||a<0){diagnostics.push({severity:'error',message:`unmatched delimiter near character ${i}`});break;}}
+      if(q)diagnostics.push({severity:'error',message:'unterminated string literal'});if(p||b||a)diagnostics.push({severity:'error',message:'unbalanced delimiters'});
+      return {source,statements,count:statements.length,diagnostics,ok:!diagnostics.some(d=>d.severity==='error'),target:'Luau → Qyrex Roblox Client Runtime'};
     }
-    function runSource(src){
-      executeLines(runtimeLines(src),0,runtimeLines(src).length-1,env);
-      let guard=0;while(queued.length&&guard++<200){const job=queued.shift();job();}
-    }
-    const treeSnapshot=()=>tree.map(x=>({id:x.obj?.__id??x.id,kind:x.obj?.ClassName||x.obj?.__kind||x.kind,name:x.obj?.Name||x.obj?.name||x.name,parent:x.obj?.Parent?.Name||x.obj?.Parent?.name||'nil',parentId:x.obj?.Parent?.__id??null,path:getFullName(x.obj||x),className:x.obj?.ClassName||x.className||x.kind}));
+    function executeIf(lines,i,scope){const end=blockEnd(lines,i);let depth=0,elseAt=-1,branches=[{at:i,cond:cleanLine(lines[i]).replace(/^if\s+/,'').replace(/\s+then\s*$/,'')}];for(let j=i+1;j<end;j++){const l=cleanLine(lines[j]);if(/^(?:local\s+)?function\b|^if\b.*\bthen\s*$|^for\b.*\bdo\s*$|^while\b.*\bdo\s*$|^repeat\b|^do\s*$/.test(l))depth++;if(/^end\s*$/.test(l))depth--;if(depth===0&&/^elseif\b/.test(l))branches.push({at:j,cond:l.replace(/^elseif\s+/,'').replace(/\s+then\s*$/,'')});if(depth===0&&/^else\s*$/.test(l))elseAt=j;}for(let k=0;k<branches.length;k++){const b=branches[k],next=branches[k+1]?.at??(elseAt>=0?elseAt:end);if(truth(evalx(b.cond,scope)))return {...executeLines(lines,b.at+1,next-1,scope),end};}if(elseAt>=0)return {...executeLines(lines,elseAt+1,end-1,scope),end};return {end};}
+    function executeLines(lines,start=0,end=lines.length-1,scope=env){let returnValue=null,didReturn=false,didBreak=false;for(let i=start;i<=end;i++){tick();currentLine=i+1;let line=cleanLine(lines[i]);if(!line)continue;
+        if(/^if\b/.test(line)){const r=executeIf(lines,i,scope);i=r.end;if(r.didReturn){returnValue=r.returnValue;didReturn=true;break}continue;}
+        if(/^repeat\b/.test(line)){const e=blockEnd(lines,i),u=cleanLine(lines[e]).replace(/^until\s+/,'');let g=0;do{const r=executeLines(lines,i+1,e-1,scope);if(r.didReturn){returnValue=r.returnValue;didReturn=true;break}if(r.didBreak){didBreak=true;break}if(++g>2000)throw Error('repeat loop limit reached');}while(!truth(evalx(u,scope)));i=e;if(didReturn||didBreak)break;continue;}
+        let m=/^for\s+([A-Za-z_]\w*)\s*=\s*([\s\S]+?)\s*,\s*([\s\S]+?)(?:\s*,\s*([\s\S]+?))?\s+do\s*$/.exec(line);
+        if(m){const e=blockEnd(lines,i),aN=Number(evalx(m[2],scope))||0,bN=Number(evalx(m[3],scope))||0,step=Number(m[4]?evalx(m[4],scope):1)||1;let g=0;for(let v=aN;step>=0?v<=bN:v>=bN;v+=step){scope[m[1]]=v;const r=executeLines(lines,i+1,e-1,scope);if(r.didReturn){returnValue=r.returnValue;didReturn=true;break}if(r.didBreak)break;if(++g>2000)throw Error('for loop limit reached');}i=e;if(didReturn)break;continue;}
+        m=/^for\s+([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s+in\s+([\s\S]+?)\s+do\s*$/.exec(line);
+        if(m){const e=blockEnd(lines,i),vals=evalx(m[2],scope)||[],list=Array.isArray(vals)?vals:(vals.values||vals.__children||[]);for(const item of list){const pair=Array.isArray(item)?item:[item];m[1].split(',').map(x=>x.trim()).forEach((n,idx)=>scope[n]=pair[idx]??null);const r=executeLines(lines,i+1,e-1,scope);if(r.didReturn){returnValue=r.returnValue;didReturn=true;break}if(r.didBreak)break}i=e;if(didReturn)break;continue;}
+        if(/^while\b/.test(line)){const e=blockEnd(lines,i),cond=line.replace(/^while\s+/,'').replace(/\s+do\s*$/,'');let g=0;while(truth(evalx(cond,scope))){const r=executeLines(lines,i+1,e-1,scope);if(r.didReturn){returnValue=r.returnValue;didReturn=true;break}if(r.didBreak)break;if(++g>2000)throw Error('while loop limit reached')}i=e;if(didReturn)break;continue;}
+        if(/^do\s*$/.test(line)){const e=blockEnd(lines,i),r=executeLines(lines,i+1,e-1,scope);i=e;if(r.didReturn){returnValue=r.returnValue;didReturn=true;break}continue;}
+        if(/^(?:local\s+)?function\s+/.test(line)){const local=/^local\s+function/.test(line),mh=/^(?:local\s+)?function\s+([A-Za-z_]\w*(?::[A-Za-z_]\w*)?)\s*\(([^)]*)\)\s*$/.exec(line);if(mh){const e=blockEnd(lines,i),fn=makeLuaFunction(mh[2],lines.slice(i+1,e).join('\n'),mh[1],scope);if(mh[1].includes(':')){const [base,method]=mh[1].split(':');const obj=lookup(base,scope);if(obj)obj[method]=fn;}else scope[mh[1]]=fn;i=e;continue;}}
+        if(/^break\b/.test(line)){didBreak=true;break;}if(/^continue\b/.test(line))continue;
+        m=/^return\b(?:\s+([\s\S]+))?$/.exec(line);if(m){returnValue=m[1]?evalx(m[1],scope):null;didReturn=true;break;}
+        m=/^local\s+([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)(?:\s*=\s*([\s\S]+))?$/.exec(line);if(m){const names=m[1].split(',').map(x=>x.trim()),vals=splitTop(m[2]||'').map(x=>evalx(x,scope));names.forEach((n,idx)=>scope[n]=vals[idx]??null);continue;}
+        m=/^(.+?)\s*(\+=|-=|\*=|\/=|%=|\+\+|--|=)\s*([\s\S]+)?$/.exec(line);if(m&&!/^==/.test(m[2])){const lhs=m[1].trim(),op=m[2],rhs=m[3];const cur=evalx(lhs,scope);let value;if(op==='=')value=evalx(rhs,scope);else if(op==='++')value=Number(cur||0)+1;else if(op==='--')value=Number(cur||0)-1;else{const rv=evalx(rhs,scope);value=op=='+='?Number(cur||0)+Number(rv):op=='-='?Number(cur||0)-Number(rv):op=='*='?Number(cur||0)*Number(rv):op=='/='?Number(cur||0)/Number(rv):Number(cur||0)%Number(rv);}assignPath(lhs,value,scope);continue;}
+        if(/^(?:end|elseif|else|until)\b/.test(line))continue;evalx(line,scope);
+      }return {didReturn,returnValue,didBreak};}
+    function executeSource(src,scope=env){return executeLines(runtimeLines(src),0,runtimeLines(src).length-1,scope);}
+    function treeSnapshot(){return tree.map(x=>({id:x.__id,kind:x.ClassName||x.__kind,name:x.Name||x.name,parent:x.Parent?.Name||'nil',parentId:x.Parent?.__id||null,path:fullName(x),className:x.ClassName||x.__kind}));}
+    function programSummary(){const types=[];if(stdout.length)types.push('PRINT');if(tree.some(x=>/Gui|Frame|Label|Button|TextBox|Image|ScrollingFrame|UI/.test(x.ClassName||'')))types.push('UI');if(calls.some(x=>x.kind==='library'))types.push('LIBRARY');if(calls.some(x=>x.kind==='event'))types.push('EVENT');if(calls.some(x=>x.kind==='remote'))types.push('REMOTE');if(calls.some(x=>x.kind==='network'))types.push('NETWORK');if(calls.some(x=>x.kind==='service'))types.push('SERVICE');if(!types.length)types.push('SCRIPT');return [...new Set(types)];}
     initializing=false;
-    return {run(src){let compiled=compileLuau(src);try{if(!compiled.ok)throw Error(compiled.diagnostics.map(d=>d.message).join(' · '));runSource(src)}catch(e){push(stderr,'runtime: '+(e?.message||e));call('runtime.error',[e?.message||String(e)],null,'error')}const snapshot=treeSnapshot();const kinds=runtimeClassification({stdout,stderr,calls,tree:snapshot});return {stdout,stderr,calls,env,steps,tree:snapshot,bootstrapCount,DataModel,services,workspace:workspaceRoot,compiled,programTypes:kinds}}};
+    return {run(src){const compiled=compileLuau(src);try{if(!compiled.ok)throw Error(compiled.diagnostics.map(d=>d.message).join(' · '));executeSource(src);let guard=0;while(queued.length&&guard++<500){const job=queued.shift();job();}}catch(e){push(stderr,'runtime: '+(e?.message||String(e)));call('runtime.error',[e?.message||String(e)],null,'error');}const snapshot=treeSnapshot();return {stdout,stderr,calls,env,steps,tree:snapshot,bootstrapCount,DataModel,services,workspace:workspaceRoot,compiled,programTypes:programSummary(),toPlain};}};
   }
 
   async function deobfuscate() {
@@ -2491,7 +2418,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
       const rt = makeSafeRuntime();
       const runtimeResult = rt.run(runtimeSource);
       state.runtime = runtimeResult;
-      state.calls = (finalAnalysis.calls || []).concat((runtimeResult.calls || []).map(c => ({...c, line: c.line || 0})));
+      state.calls = (runtimeResult.calls || []).map(c => ({...c, line: c.line || 0}));
       state.engine = recovered ? "Qyrex Roblox Runtime · recovered source" : "Qyrex Roblox Runtime · source simulation";
       if (recovered) {
         setCode(state.cleaned);
@@ -2508,7 +2435,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
           "25ms / FlameCoder / HookOp / Mimic / Larry / Zala static analyzers",
           "Unveilr / Prometheus / IronBrew / MoonVeil / Luarmor / Junkie signatures",
           "Calls + Environment static dump (library/service/global/file/network metadata)",
-          "Roblox-like Luau Runtime Compiler (bounded subset + DataModel/Services/Instances/Events/PlayerGui/require/loadstring tracing)"
+          "Roblox Client Runtime Lab (Luau compiler + DataModel + Services + Instances + PlayerGui + Signals + Remotes + library shims)"
         ],
         stdout: (runtimeResult.stdout || []).join("\n"),
         stderr: (runtimeResult.stderr || []).join("\n"),
@@ -2525,8 +2452,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
       log(`Base64 candidates: ${Number(a.dumpers?.strings?.base64?.length || 0).toLocaleString()} · hex: ${Number(a.dumpers?.strings?.hex?.length || 0).toLocaleString()} · XOR: ${Number(a.dumpers?.strings?.xor?.length || 0).toLocaleString()}`, "out");
       const layerInfo = staticFallback(src, a).split("\n").find(line => line.includes("Recursive decoders:")) || "";
       if (layerInfo) log(layerInfo.replace(/^--\s*/, ""), "out");
-      log(`Final behaviors: ${Number(state.calls?.length || finalAnalysis.calls?.length || 0).toLocaleString()} · libraries: ${Number(finalAnalysis.libraries?.length || 0).toLocaleString()} · services: ${Number(finalAnalysis.services?.length || 0).toLocaleString()}`, "out");
-      log(`Safe runtime: ${Number(runtimeResult.calls?.length || 0).toLocaleString()} calls · ${Number(runtimeResult.steps || 0).toLocaleString()} steps · stdout ${Number(runtimeResult.stdout?.length || 0).toLocaleString()}`, "out");
+      log(`Runtime behaviors: ${Number(runtimeResult.calls?.length || 0).toLocaleString()} · types: ${(runtimeResult.programTypes || []).join(', ')}`, "out");
+      log(`Roblox Client Runtime: ${Number(runtimeResult.calls?.length || 0).toLocaleString()} calls · ${Number(runtimeResult.steps || 0).toLocaleString()} steps · stdout ${Number(runtimeResult.stdout?.length || 0).toLocaleString()}`, "out");
       if (runtimeResult.stdout?.length) runtimeResult.stdout.slice(0,50).forEach(x => log(`[print] ${x}`, "out"));
       if (runtimeResult.stderr?.length) runtimeResult.stderr.slice(0,50).forEach(x => log(`[warn/error] ${x}`, "warn"));
       log(recovered ? "Deobfuscation finished: recovered code loaded into the editor." : "Deobfuscation finished: no additional static layer was recoverable.", recovered ? "out" : "warn");

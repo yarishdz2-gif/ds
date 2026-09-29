@@ -25,3 +25,10 @@ No inicia el proceso real de Roblox, no inyecta código en el cliente de Roblox 
 ## GitHub Pages
 
 Sube `index.html` y `lib/` manteniendo la estructura del ZIP.
+
+
+## Runtime v4
+
+This build uses a local, bounded Luau interpreter with a Roblox-like DataModel. It reconstructs final source first, then evaluates the supported Luau subset inside `game`, `Players.LocalPlayer`, `PlayerGui`, `Workspace`, services, Instances, RBXScriptSignals, remotes, task scheduling and common library/UI shims. The Output is generated from runtime events rather than regex-only static matches.
+
+It remains a local simulation: it does not inject into or execute code inside the real Roblox client.
