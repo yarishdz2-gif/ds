@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#f8fafc">
-<title>QyrexDeobf — Multi-layer (Base64 · XOR · Hex · URL · Luraph-aware)</title>
+<title>QyrexDeobf — Browser Multi-Engine Deobfuscator</title>
 <style>
 :root{
   --bg:#f7f9fc;
@@ -1453,6 +1453,135 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     return { value: current, changed, layers };
   }
 
+  function detectSourceLanguage(src) {
+    const s = String(src || '').trim();
+    if (!s) return 'unknown';
+    if (/(?:__builtins__\.|lambda\s+[^:]+:|\bdef\s+\w+\s*\(|\bimport\s+\w+|\bfrom\s+\w+\s+import\b)/.test(s) &&
+        !/\b(?:local|function|game\s*[:.]|Instance\.new|then\b|end\b)\b/.test(s)) return 'python';
+    if (/(?:\b(?:local|function|return|if|elseif|then|end|for|while|repeat|until)\b|\bgame\s*[:.]|\bInstance\s*\.\s*new\b|\bprint\s*\()/.test(s)) return 'luau';
+    return 'unknown';
+  }
+
+  function b36Value(c) {
+    const n = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'.indexOf(String(c || '').toUpperCase());
+    return n < 0 ? -1 : n;
+  }
+
+  function tokenize77FUS(payload) {
+    const out = [];
+    let i = 0;
+    const text = String(payload || '').toUpperCase();
+    while (i < text.length) {
+      const len = b36Value(text[i++]);
+      if (len <= 0 || i + len > text.length) return null;
+      let value = 0;
+      for (let j = 0; j < len; j++) {
+        const d = b36Value(text[i + j]);
+        if (d < 0) return null;
+        value = value * 36 + d;
+        if (value > 0x7fffffff) return null;
+      }
+      i += len;
+      out.push(value);
+    }
+    return out;
+  }
+
+  function lzw77FUS(payload, seed = 256) {
+    const codes = tokenize77FUS(payload);
+    if (!codes?.length) return null;
+    const dict = new Array(seed);
+    for (let i = 0; i < seed; i++) dict[i] = String.fromCharCode(i);
+    const first = codes[0];
+    if (first < 0 || first >= dict.length) return null;
+    let w = dict[first];
+    let result = w;
+    for (let i = 1; i < codes.length; i++) {
+      const code = codes[i];
+      let entry;
+      if (code < dict.length) entry = dict[code];
+      else if (code === dict.length) entry = w + w[0];
+      else return null;
+      result += entry;
+      dict.push(w + entry[0]);
+      w = entry;
+      if (result.length > 5000000) return null;
+    }
+    return result;
+  }
+
+  function peel77FUS(src) {
+    const text = String(src || '');
+    const matches = [...text.matchAll(/77FUS\|([0-9A-Z]+)/g)];
+    for (const m of matches) {
+      const payload = m[1];
+      if (!payload) continue;
+      const pureHex = payload.length % 2 === 0 && /^[0-9A-F]+$/i.test(payload);
+      if (pureHex) {
+        const bytes = new Uint8Array(payload.length / 2);
+        for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(payload.slice(i * 2, i * 2 + 2), 16);
+        return { kind:'hex-blob', source:text, payload, bytes, recovered:false, method:'77FUS hex bytecode blob' };
+      }
+      for (const seed of [256, 208]) {
+        const decoded = lzw77FUS(payload, seed);
+        if (decoded && /77FUS\|[0-9A-Z]+/i.test(decoded)) {
+          return { kind:'vm-script', source:decoded, payload, recovered:true, method:`77FUS LZW/base36 seed ${seed}` };
+        }
+      }
+    }
+    // Variant documented in the uploaded 77fuscator deobfuscator: a long quoted
+    // base36/LZW payload without a 77FUS prefix.
+    const quoted = [...text.matchAll(/['"]([0-9A-Z]{1000,})['"]/g)];
+    for (const m of quoted.slice(0, 30)) {
+      for (const seed of [256, 208]) {
+        const decoded = lzw77FUS(m[1], seed);
+        if (decoded && decoded.length > 20 && /(?:local|function|return|77FUS\|)/i.test(decoded)) {
+          return { kind:'variant', source:decoded, payload:m[1], recovered:true, method:`LZW/base36 quoted blob seed ${seed}` };
+        }
+      }
+    }
+    return {kind:'none', source:text, recovered:false, method:'no 77FUS wrapper'};
+  }
+
+  function reducePythonStatic(src) {
+    let out = String(src || '').replace(/^\uFEFF/, '').trim();
+    const layers = [];
+    for (let pass = 0; pass < 24; pass++) {
+      const before = out;
+      // bytes(map(lambda x:x ^ N, [decimal bytes...])).decode()
+      out = out.replace(/bytes\(\s*map\(\s*lambda\s+([A-Za-z_]\w*)\s*:\s*\1\s*\^\s*(\d+)\s*,\s*\[\s*([0-9\s,]+)\s*\]\s*\)\s*\)\s*\.decode\s*\(\s*\)/g,
+        (_, _v, key, nums) => {
+          const k = Number(key) & 255;
+          const values = nums.split(/\s*,\s*/).filter(Boolean).map(Number);
+          if (!values.length || values.some(n => !Number.isInteger(n) || n < 0 || n > 255)) return _;
+          layers.push(`python bytes/map xor ${k}`);
+          return JSON.stringify(String.fromCharCode(...values.map(n => n ^ k)));
+        });
+      // bytes([N, ...]).decode()
+      out = out.replace(/bytes\(\s*\[\s*([0-9\s,]+)\s*\]\s*\)\s*\.decode\s*\(\s*\)/g, (_, nums) => {
+        const values = nums.split(/\s*,\s*/).filter(Boolean).map(Number);
+        if (!values.length || values.some(n => !Number.isInteger(n) || n < 0 || n > 255)) return _;
+        layers.push('python bytes list');
+        return JSON.stringify(String.fromCharCode(...values));
+      });
+      // chr(...)+chr(...) chains
+      out = out.replace(/(?:chr\(\s*(\d+)\s*\)\s*\+\s*){2,}chr\(\s*(\d+)\s*\)/g, (full) => {
+        const nums = [...full.matchAll(/chr\(\s*(\d+)\s*\)/g)].map(m => Number(m[1]));
+        if (!nums.length || nums.some(n => n < 0 || n > 0x10ffff)) return full;
+        layers.push('python chr chain');
+        return JSON.stringify(String.fromCodePoint(...nums));
+      });
+      // Reveal constant strings passed through exec/eval/compile without executing them.
+      out = out.replace(/\b(?:exec|eval|compile)\(\s*(["'])(.*?)\1\s*(?:,[\s\S]*?)?\)/g, (full, q, body) => {
+        layers.push('python literal loader');
+        return JSON.stringify(body);
+      });
+      if (out === before) break;
+    }
+    // Never pretend Python is Luau. Return the reduced Python expression/source.
+    return { source: out, recovered: out !== String(src || '').trim(), layers };
+  }
+
   function decodeAllLayers(src) {
     const original = String(src || '');
     const keys = extractXorKeys(original);
@@ -1574,6 +1703,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 
   function detectProvider(src) {
     const rules = [
+      ['Python',/(?:__builtins__\.|lambda\s+[^:]+:|\bdef\s+\w+\s*\()/i],
+      ['77fuscator',/\b77fuscator\b|77FUS\|[0-9A-Z]+/i],
       ['Luraph',/This file was protected using Luraph Obfuscator|(?:\bCALL\b.*\bCHECKIF\b.*\bCHECKWHILE\b)|\.YA\s*\(\s*\)/is],
       ['FlameCoder/FlameDumper',/\b(?:Universal Reader|_HOOKOP|CODER_CALL)\b/i],
       ['25ms',/(?:__25mslocation|<25ms_concat_me>|@25msrequireluvsu)/i],
@@ -1942,7 +2073,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     const vmCount=markers.reduce((a,b)=>a+b.count,0);
 
     return {
-      filename, provider:detectProvider(src), bytes:byteLength(src), lines,
+      filename, language:detectSourceLanguage(src), provider:detectProvider(src), bytes:byteLength(src), lines,
       functions:(src.match(/\bfunction\b/g)||[]).length,
       loops:(src.match(/\b(?:while|repeat|for)\b/g)||[]).length,
       branches:(src.match(/\b(?:if|elseif)\b/g)||[]).length,
@@ -1980,7 +2111,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 
   window.QyrexBrowserAnalyzer = {
     analyze, cleanSource, extractUltimatePayload, foldPureCalls, extractStrings, extractEncodedCandidates, decodeAllLayers, recursiveDecodeString,
-    identifyVMMarkers, detectProvider, foldStaticConstants, recoverStaticBuilderLoops, unwrapRecoveredLoaders, extractBestDecodedProgram
+    identifyVMMarkers, detectProvider, foldStaticConstants, recoverStaticBuilderLoops, unwrapRecoveredLoaders, extractBestDecodedProgram,
+    detectSourceLanguage, peel77FUS, reducePythonStatic, lzw77FUS
   };
 })();
 </script>
@@ -2091,13 +2223,16 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 
   function updatePreflight() {
     const a = analyzeLuraph(state.code);
+    const lang = a.language || window.QyrexBrowserAnalyzer.detectSourceLanguage(state.code);
     state.analysis = a;
     $("detectBadge").textContent = a.detected ? `Luraph ${a.version}` : "Not detected";
     $("detectBadge").style.background = a.detected ? "#eaf2ff" : "#f2f5f8";
     $("detectBadge").style.color = a.detected ? "#2763bd" : "#708197";
-    $("diagnosticText").textContent = a.detected
-      ? `${a.bytes.toLocaleString()} bytes · ${a.functions.toLocaleString()} functions · VM markers ${a.vmMarkers}`
-      : "Carga un script Luau para iniciar el análisis.";
+    $("diagnosticText").textContent = lang === 'python'
+      ? `Python detectado · ${a.bytes.toLocaleString()} bytes · reducción estática segura`
+      : a.detected
+        ? `${a.bytes.toLocaleString()} bytes · ${a.functions.toLocaleString()} functions · VM markers ${a.vmMarkers}`
+        : "Carga un script Luau para iniciar el análisis.";
   }
 
   function analyzeLuraph(src) {
@@ -2108,10 +2243,11 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     const base = analyzer.analyze(src, state?.fileName || "script.lua");
     const provider = base.provider || "Unknown";
     const versionMatch = /Luraph[^\n]*?v([\d.]+)/i.exec(src);
-    const detected = provider !== "Unknown";
+    const detected = provider !== "Unknown" && provider !== "Python";
     const version = versionMatch ? versionMatch[1] : (provider === "Luraph" ? "15.x" : "—");
     const vmMarkers = Number(base.dumpers?.vm?.count || 0);
     return Object.assign(base, {
+      language: base.language || window.QyrexBrowserAnalyzer.detectSourceLanguage(src),
       detected,
       version,
       vmMarkers,
@@ -2121,8 +2257,27 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 
   function staticFallback(src, analysis) {
     const analyzer = window.QyrexBrowserAnalyzer;
-    let current = String(src || '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').trim();
+    let original = String(src || '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').trim();
+    let current = original;
     if (!current) return '';
+
+    // The user-provided sample is Python, not Luau. Reduce its constant
+    // byte/string layers instead of sending it through the Roblox runtime.
+    if (analyzer?.detectSourceLanguage?.(current) === 'python') {
+      const py = analyzer.reducePythonStatic(current);
+      return py.source ? py.source + '\n' : current + '\n';
+    }
+
+    // Peel 77fuscator's documented outer LZW/base36 layer before generic Lua
+    // reconstruction. A raw 77FUS hex blob still needs its VM-specific lifter.
+    try {
+      const peeled = analyzer?.peel77FUS?.(current);
+      if (peeled?.recovered && peeled.source && peeled.source !== current) {
+        current = peeled.source.trim();
+        // Keep the engine-specific peeled layer instead of ranking the outer wrapper back in.
+        if (peeled.kind === 'vm-script' || peeled.kind === 'variant') return current + '\n';
+      }
+    } catch (_) {}
 
     const seen = new Set();
     const rank = (s) => {
@@ -2762,16 +2917,15 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     const s = String(src || '').trim();
     if (!s) return false;
     if (s.length > 2000000) return false;
-    return /(?:\bprint\s*\(|\bwarn\s*\(|\berror\s*\(|\bInstance\s*\.\s*new\s*\(|\bgame\s*[:.]\s*GetService\s*\(|\bfunction\b|\breturn\b|\blocal\s+[A-Za-z_])/i.test(s);
+    return /(?:\bprint\s*\(|\bwarn\s*\(|\berror\s*\(|\bInstance\s*\.\s*new\s*\(|\bgame\s*[:.]\s*GetService\s*\(|\bfunction\b|\breturn\b|\blocal\s+[A-Za-z_]|\b(?:exec|eval|compile)\s*\(|__builtins__|\blambda\s+)/i.test(s);
   }
 
   let qyrexLuauModulePromise = null;
 
   async function loadRealLuauWeb() {
-    if (qyrexLuauModulePromise) return qyrexLuauModulePromise;
-    qyrexLuauModulePromise = import("https://cdn.jsdelivr.net/gh/xNasuni/luau-web@v1.4.0/dist/luauweb.min.js")
-      .catch(error => { qyrexLuauModulePromise = null; throw error; });
-    return qyrexLuauModulePromise;
+    // GitHub Pages build: no external runtime/CDN dependency.
+    // The local Qyrex Roblox runtime remains the deterministic fallback.
+    throw new Error('External Luau WASM disabled in GitHub Pages build; using local Roblox Runtime.');
   }
 
   function makeRealLuauRobloxEnv(Mutable) {
@@ -2920,10 +3074,46 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
       // Pass 1: aggressive static reconstruction.
       let best = staticFallback(src, a);
       let bestScore = scoreRecoveredProgram(best);
+      const sourceLanguage = window.QyrexBrowserAnalyzer.detectSourceLanguage(src);
 
-      // Pass 2: execute the wrapper ONLY inside the local Roblox-style sandbox.
-      // Any source handed to loadstring/load is captured instead of escaping to the browser.
-      let probeResult = await probeWithRealLuau(src);
+      // Python wrappers are handled by a safe constant reducer and must never be
+      // passed into the Luau/Roblox runtime. This is important for samples that
+      // use __builtins__, lambda, bytes(map(...)) or similar Python syntax.
+      if (sourceLanguage === 'python') {
+        const normalizedOriginal = src.replace(/\s+/g, ' ').trim();
+        const normalizedBest = String(best || '').replace(/\s+/g, ' ').trim();
+        const pyRecovered = Boolean(best && normalizedBest !== normalizedOriginal);
+        state.cleaned = pyRecovered ? best.trim() : src;
+        state.recovered = pyRecovered;
+        state.analysis = analyzeLuraph(state.cleaned);
+        state.runtime = {
+          stdout: [], stderr: [], calls: [], steps: 0, tree: [], bootstrapCount: 0,
+          dynamicSources: [], services: {}, env: {}, programTypes: ['PYTHON'],
+          compiled: {ok: true, count: 0, diagnostics: [], target: 'Python static reducer (browser)'}
+        };
+        state.calls = [];
+        state.engine = 'QyrexDeobf Browser · Python static reconstruction';
+        if (pyRecovered) {
+          setCode(state.cleaned);
+          log(`Python payload reduced: ${state.cleaned.length.toLocaleString()} characters`, 'out');
+        }
+        log(`Provider: ${a.provider} · Language: Python`, 'sys');
+        log(pyRecovered ? 'Constant/byte layers reconstructed without executing Python.' : 'No safe Python reduction was found.', pyRecovered ? 'out' : 'warn');
+        state.report = {elapsedMs: performance.now() - t0, stdout:'', stderr:'', dynamicChunks:0, runtimeCalls:0, runtimeSteps:0, compiler:state.runtime.compiled, packs:['Python constant reduction','bytes/map XOR reduction','no arbitrary Python execution']};
+        switchRight('output');
+        toast('QyrexDeobf', pyRecovered ? 'Python payload reconstruido de forma estática.' : 'Python detectado; no hubo payload estático recuperable.');
+        setStatus(pyRecovered ? 'Deobfuscated' : 'Analyzed', pyRecovered ? 'success' : 'warn');
+        return;
+      }
+
+      // Pass 2: execute Lua/Luau wrappers only inside the local Roblox-style sandbox.
+      // Python input is reduced statically and never sent through the Luau runtime.
+      let probeResult = null;
+      if (sourceLanguage !== 'python') {
+        probeResult = await probeWithRealLuau(src);
+      } else {
+        probeResult = {ok:false, error:'Python source detected; Luau runtime skipped.'};
+      }
       if (!probeResult.ok) {
         const probe = makeSafeRuntime();
         probeResult = probe.run(src);
@@ -2935,7 +3125,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 
       for (const chunk of dynamic.slice(0, 100)) {
         if (state.controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
-        const candidateRaw = String(chunk?.source || '').trim();
+        const candidateRaw = typeof chunk === 'string' ? chunk.trim() : String(chunk?.source || '').trim();
         if (!candidateRaw || candidateRaw.length > 2000000) continue;
         const candidate = staticFallback(candidateRaw, a);
         const sc = scoreRecoveredProgram(candidate);
