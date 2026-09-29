@@ -1,21 +1,7 @@
-# QyrexDeobf — Roblox Runtime v5
+# QyrexDeobf — GitHub Pages browser build v7
 
-Versión GitHub Pages del desofuscador con reconstrucción estática multicapa.
+Static-only deployment. Upload `index.html` and `.nojekyll` to GitHub Pages.
 
-## Flujo
+The browser pipeline uses aggressive static reconstruction first, then attempts a real Luau WebAssembly VM (`luau-web` 1.4.0) to execute decoder wrappers in a restricted local environment and capture strings passed to `loadstring/load`. If the external VM cannot load, it automatically falls back to the built-in local Roblox-style sandbox.
 
-`source ofuscado -> recuperación de constantes -> constructores estáticos -> Base64/XOR/Hex/URL/decimal/reverse/string.char -> unwrap load/loadstring -> Luau limpio -> Runtime Roblox simulado`
-
-## Capas cubiertas
-
-- Base64 estándar, URL-safe y capas anidadas.
-- XOR de byte único y bucles estáticos comunes.
-- Hex, bytes decimales, escapes octales y URL percent-encoded.
-- `string.char`, `utf8.char`, `table.concat`, concatenación y constantes.
-- Variables constantes que terminan en `loadstring()` / `load()`.
-- Constructores `out .. string.char(string.byte(data,i) ~ key)` y variantes aritméticas comunes.
-- Extracción del payload final para evitar mostrar el wrapper como si fuera el código recuperado.
-
-El Output del Runtime está separado del trace interno del decoder.
-
-> Nota: un desofuscador estático no puede garantizar recuperar protecciones arbitrarias o una VM totalmente customizada. Esta versión prioriza recuperar código estático cuando el payload es reconstruible sin ejecutar código arbitrario.
+The Open/Browse control uses the browser File API with a FileReader fallback. No `server.js`, Node APIs, backend endpoints, or `/api` calls are required.

@@ -435,7 +435,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
       <button class="tool-btn" id="btnOpen"><span class="icon">□</span><span class="label">Open</span></button>
       <button class="tool-btn hide-sm" id="btnSave"><span class="icon">⇩</span><span class="label">Save</span></button>
       <button class="tool-btn soft hide-sm"><span class="icon">▣</span><span class="label">Editor</span></button>
-      <input id="fileInput" type="file" accept=".lua,.luau,.txt" hidden>
+      <input id="fileInput" type="file" accept=".lua,.luau,.txt,text/plain" hidden>
 
       <button class="tool-btn primary" id="btnRun"><span class="icon">▶</span><span class="label">Run</span></button>
       <button class="tool-btn stop" id="btnStop" disabled><span class="icon">■</span><span class="label">Stop</span></button>
@@ -610,6 +610,9 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     out = out.replace(/\\x([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
     out = out.replace(/\\u\{([0-9a-fA-F]+)\}/g, (_, h) => {
       try { return String.fromCodePoint(parseInt(h, 16)); } catch (_) { return _; }
+    });
+    out = out.replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => {
+      try { return String.fromCharCode(parseInt(h, 16)); } catch (_) { return _; }
     });
     out = out.replace(/\\([0-9]{1,3})/g, (_, d) => {
       const n = Number(d);
@@ -2120,17 +2123,71 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     const analyzer = window.QyrexBrowserAnalyzer;
     let current = String(src || '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').trim();
     if (!current) return '';
-    for (let pass = 0; pass < 24; pass++) {
+
+    const seen = new Set();
+    const rank = (s) => {
+      const v = String(s || '').trim();
+      if (!v) return -1e9;
+      let score = 0;
+      const low = v.toLowerCase();
+      if (/\b(?:print|warn|error)\s*\(/i.test(v)) score += 80;
+      if (/\binstance\s*\.\s*new\s*\(/i.test(v)) score += 70;
+      if (/\bgame\s*[:.]\s*getservice\s*\(/i.test(v)) score += 45;
+      if (/\b(?:local|function|return|if|for|while|repeat)\b/i.test(v)) score += 20;
+      if (/\b(?:loadstring|decode|decrypt|base64|xor|string\.char|string\.byte|bit32)\b/i.test(v)) score -= 16;
+      if (/\b(?:PROTO|HANDLER|DISPATCH|CHECKIF|CHECKWHILE|CALL)\b/i.test(v)) score -= 8;
+      score += Math.min(28, Math.log10(Math.max(1, v.length)) * 6);
+      // Prefer compact final programs over huge wrappers when behavior is comparable.
+      score -= Math.min(35, v.length / 20000);
+      return score;
+    };
+
+    const choose = (candidates) => {
+      let best = current;
+      let bestScore = rank(current);
+      for (const candidate of candidates) {
+        const v = String(candidate || '').trim();
+        if (!v || v === best || v.length > 2000000) continue;
+        if (seen.has(v)) continue;
+        seen.add(v);
+        const sc = rank(v);
+        // A clear Lua payload should win over a wrapper even when its text quality is lower.
+        const clear = analyzer?.extractUltimatePayload ? analyzer.extractUltimatePayload(v) : null;
+        const clearSource = clear?.source && clear.recovered ? String(clear.source).trim() : null;
+        const finalCandidate = clearSource && rank(clearSource) >= sc ? clearSource : v;
+        const fs = rank(finalCandidate);
+        if (fs > bestScore + 0.25 && analyzer?.looksLikeLuaSource ? analyzer.looksLikeLuaSource(finalCandidate) : /\b(?:local|function|return|print|game[.:]|Instance\.new)\b/i.test(finalCandidate)) {
+          best = finalCandidate;
+          bestScore = fs;
+        }
+      }
+      return best;
+    };
+
+    for (let pass = 0; pass < 40; pass++) {
       const before = current;
-      current = foldStaticConstants(current);
-      current = recoverStaticBuilderLoops(current);
-      current = analyzer.cleanSource(current);
-      current = unwrapRecoveredLoaders(current);
-      const ultimate = analyzer.extractUltimatePayload(current);
-      if (ultimate?.source && scoreLuaProgram(ultimate.source) > scoreLuaProgram(current)) current = ultimate.source.trim();
+      const candidates = [];
+      try { candidates.push(foldStaticConstants(current)); } catch (_) {}
+      try { candidates.push(recoverStaticBuilderLoops(current)); } catch (_) {}
+      try { candidates.push(analyzer.cleanSource(current)); } catch (_) {}
+      try { candidates.push(unwrapRecoveredLoaders(current)); } catch (_) {}
+      try {
+        const ultimate = analyzer.extractUltimatePayload(current);
+        if (ultimate?.source) candidates.push(ultimate.source);
+      } catch (_) {}
+      try {
+        const bestProgram = analyzer.extractBestDecodedProgram(current);
+        if (bestProgram?.source) candidates.push(bestProgram.source);
+      } catch (_) {}
+      current = choose(candidates);
+      current = current
+        .replace(/^\s*--\s*This file was protected using Luraph Obfuscator v[\d.]+.*$/gim, '')
+        .replace(/^\s*--\s*QyrexDeobf.*$/gim, '')
+        .replace(/\n{4,}/g, '\n\n\n')
+        .trim();
       if (current === before) break;
     }
-    return current.trimEnd() + '\n';
+    return current ? current + '\n' : '';
   }
 
   function runtimeKind(name, args = []) {
@@ -2421,6 +2478,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
   // Roblox client, executor, filesystem or network is launched.
   function makeSafeRuntime(){
     const stdout=[], stderr=[], calls=[], env=Object.create(null), tree=[];
+    const dynamicSources=[];
     const queued=[], moduleCache=new Map();
     let steps=0, nextId=0, initializing=true, currentLine=0;
     const MAX_STEPS=120000, MAX_LOG=12000, MAX_CALL_DEPTH=40;
@@ -2620,7 +2678,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
       if(name==='warn'){const s=args.map(fmt).join('\t');push(stderr,s);call('warn',args,null,'warn');return null;}
       if(name==='error'){const s='error: '+args.map(fmt).join('\t');push(stderr,s);call('error',args,null,'error');return null;}
       if(name==='require')return moduleFor(args[0]);
-      if(name==='loadstring'||name==='load'){const source=typeof args[0]==='string'?args[0]:'';let fn;if(source&&/\b(?:local|function|return|print|warn|Instance\.new|game[.:])\b/.test(source))fn=makeLuaFunction([],source,'loadstring',scope);else fn=makeLuaFunction([],source,'loadstring',scope,(...aa)=>{call('loadstring:invoke',aa,null,'runtime');return libraryObject('LoadedLibrary')});call(name,args,fn,'runtime');return fn;}
+      if(name==='loadstring'||name==='load'){const source=typeof args[0]==='string'?args[0]:'';if(source&&source.length<=2000000){if(!dynamicSources.some(x=>x.source===source))dynamicSources.push({source,origin:name,line:currentLine});}let fn;if(source&&/\b(?:local|function|return|print|warn|Instance\.new|game[.:])\b/.test(source))fn=makeLuaFunction([],source,'loadstring',scope);else fn=makeLuaFunction([],source,'loadstring',scope,(...aa)=>{call('loadstring:invoke',aa,null,'runtime');return libraryObject('LoadedLibrary')});call(name,args,fn,'runtime');return fn;}
       if(name==='getgenv'||name==='getfenv'||name==='getrenv')return env[name]();
       if(name==='setclipboard'){call('setclipboard',args,null,'environment');return null;}
       if(name.includes(':')){const z=name.split(/:(.+)/),obj=evalx(z[0],scope);return invokeMethod(obj,z[1],args);}
@@ -2634,7 +2692,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
       const uq=unquote(s);if(uq!==null)return uq;
       if(s==='true')return true;if(s==='false')return false;if(s==='nil')return null;if(s==='...')return scope.__vararg||[];
       if(/^[-+]?0x[0-9a-f]+$/i.test(s))return parseInt(s,16);if(/^[-+]?\d+(?:\.\d+)?$/.test(s))return Number(s);
-      if(s.startsWith('#')){const v=evalx(s.slice(1),scope);return Array.isArray(v)?v.length:(v?.values?.length??Object.keys(v?.fields||{}).length);}
+      if(s.startsWith('#')){const v=evalx(s.slice(1),scope);if(typeof v==='string')return v.length;return Array.isArray(v)?v.length:(v?.values?.length??Object.keys(v?.fields||{}).length);}
       if(/^function\b/.test(s)){const c=captureFunction(s,0,scope);return c?.fn||makeLuaFunction([],s,'anonymous',scope);}
       if(s[0]==='{'&&s.endsWith('}'))return evalTable(s,scope);
       if(s.startsWith('not '))return !truth(evalx(s.slice(4),scope));if(s.startsWith('-'))return -Number(evalx(s.slice(1),scope));if(s.startsWith('~'))return (~Number(evalx(s.slice(1),scope)))>>>0;
@@ -2680,7 +2738,156 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     function treeSnapshot(){return tree.map(x=>({id:x.__id,kind:x.ClassName||x.__kind,name:x.Name||x.name,parent:x.Parent?.Name||'nil',parentId:x.Parent?.__id||null,path:fullName(x),className:x.ClassName||x.__kind}));}
     function programSummary(){const types=[];if(stdout.length)types.push('PRINT');if(tree.some(x=>/Gui|Frame|Label|Button|TextBox|Image|ScrollingFrame|UI/.test(x.ClassName||'')))types.push('UI');if(calls.some(x=>x.kind==='library'))types.push('LIBRARY');if(calls.some(x=>x.kind==='event'))types.push('EVENT');if(calls.some(x=>x.kind==='remote'))types.push('REMOTE');if(calls.some(x=>x.kind==='network'))types.push('NETWORK');if(calls.some(x=>x.kind==='service'))types.push('SERVICE');if(!types.length)types.push('SCRIPT');return [...new Set(types)];}
     initializing=false;
-    return {run(src){const compiled=compileLuau(src);try{if(!compiled.ok)throw Error(compiled.diagnostics.map(d=>d.message).join(' · '));executeSource(src);let guard=0;while(queued.length&&guard++<500){const job=queued.shift();job();}}catch(e){push(stderr,'runtime: '+(e?.message||String(e)));call('runtime.error',[e?.message||String(e)],null,'error');}const snapshot=treeSnapshot();return {stdout,stderr,calls,env,steps,tree:snapshot,bootstrapCount,DataModel,services,workspace:workspaceRoot,compiled,programTypes:programSummary(),toPlain};}};
+    return {run(src){const compiled=compileLuau(src);try{if(!compiled.ok)throw Error(compiled.diagnostics.map(d=>d.message).join(' · '));executeSource(src);let guard=0;while(queued.length&&guard++<500){const job=queued.shift();job();}}catch(e){push(stderr,'runtime: '+(e?.message||String(e)));call('runtime.error',[e?.message||String(e)],null,'error');}const snapshot=treeSnapshot();return {stdout,stderr,calls,env,steps,tree:snapshot,bootstrapCount,DataModel,services,workspace:workspaceRoot,compiled,programTypes:programSummary(),dynamicSources,toPlain};}};
+  }
+
+  function scoreRecoveredProgram(src) {
+    const s = String(src || '').trim();
+    if (!s) return -1e9;
+    let score = 0;
+    if (/\bprint\s*\(/i.test(s)) score += 100;
+    if (/\bInstance\s*\.\s*new\s*\(/i.test(s)) score += 85;
+    if (/\bgame\s*[:.]\s*GetService\s*\(/i.test(s)) score += 55;
+    if (/\bPlayers\s*\.\s*LocalPlayer\b/i.test(s)) score += 30;
+    if (/\b(?:ScreenGui|Frame|TextLabel|TextButton|TextBox|ImageLabel|ImageButton)\b/i.test(s)) score += 30;
+    if (/\bfunction\b/i.test(s)) score += 15;
+    if (/\b(?:loadstring|decode|decrypt|base64|xor|bit32|string\.char|string\.byte)\b/i.test(s)) score -= 35;
+    if (/\b(?:PROTO|DISPATCH|CHECKIF|CHECKWHILE|CALL)\b/i.test(s)) score -= 15;
+    score += Math.min(20, Math.log10(Math.max(1, s.length)) * 4);
+    score -= Math.min(50, s.length / 12000);
+    return score;
+  }
+
+  function isLikelyFinalProgram(src) {
+    const s = String(src || '').trim();
+    if (!s) return false;
+    if (s.length > 2000000) return false;
+    return /(?:\bprint\s*\(|\bwarn\s*\(|\berror\s*\(|\bInstance\s*\.\s*new\s*\(|\bgame\s*[:.]\s*GetService\s*\(|\bfunction\b|\breturn\b|\blocal\s+[A-Za-z_])/i.test(s);
+  }
+
+  let qyrexLuauModulePromise = null;
+
+  async function loadRealLuauWeb() {
+    if (qyrexLuauModulePromise) return qyrexLuauModulePromise;
+    qyrexLuauModulePromise = import("https://cdn.jsdelivr.net/gh/xNasuni/luau-web@v1.4.0/dist/luauweb.min.js")
+      .catch(error => { qyrexLuauModulePromise = null; throw error; });
+    return qyrexLuauModulePromise;
+  }
+
+  function makeRealLuauRobloxEnv(Mutable) {
+    const capture = { stdout: [], stderr: [], dynamic: [], instances: [], services: Object.create(null) };
+    const mutable = value => {
+      try { return Mutable ? Mutable(value) : value; } catch (_) { return value; }
+    };
+
+    const makeSignal = name => mutable({
+      Name: name,
+      Connect: fn => { capture.dynamic.push(`-- [Connect:${name}]`); return mutable({Disconnect:()=>{}}); },
+      Once: fn => { capture.dynamic.push(`-- [Once:${name}]`); return mutable({Disconnect:()=>{}}); },
+      Fire: (...args) => null
+    });
+
+    const instance = (className, parent=null) => {
+      const o = {
+        ClassName: String(className || "Instance"),
+        Name: String(className || "Instance"),
+        Parent: parent || null,
+        GetFullName(){
+          const names=[]; let cur=this, guard=0;
+          while(cur && guard++<80){ names.unshift(String(cur.Name || cur.ClassName || "Instance")); cur=cur.Parent; }
+          return names.join(".");
+        },
+        IsA(name){ return String(name||"")==="Instance" || String(name||"")===this.ClassName; },
+        FindFirstChild(name){ return this.__children?.find(x=>x.Name===String(name)) || null; },
+        GetChildren(){ return (this.__children || []).slice(); },
+        GetDescendants(){
+          const out=[];
+          const walk=x=>{ for(const c of (x.__children||[])){ out.push(c); walk(c); } };
+          walk(this); return out;
+        },
+        __children: []
+      };
+      o.Parent = parent || null;
+      if(parent && parent.__children) parent.__children.push(o);
+      if(/^Gui|Frame|Label|Button|TextBox|Image|ScrollingFrame|ViewportFrame|UI/.test(o.ClassName)){
+        o.Visible=true; o.Text=""; o.Size=null; o.Position=null;
+      }
+      if(/Event$/.test(o.ClassName) || o.ClassName === "BindableEvent") o.OnClientEvent=makeSignal("OnClientEvent");
+      if(o.ClassName === "RemoteEvent"){
+        o.OnClientEvent=makeSignal("OnClientEvent");
+        o.FireServer=(...args)=>{ capture.stderr.push(`[blocked] RemoteEvent:FireServer(${args.map(String).join(", ")})`); };
+        o.FireClient=(...args)=>{ capture.stderr.push(`[blocked] RemoteEvent:FireClient(${args.map(String).join(", ")})`); };
+      }
+      capture.instances.push(o);
+      return mutable(o);
+    };
+
+    const DataModel = instance("DataModel");
+    DataModel.Name = "game";
+    const workspace = instance("Workspace", DataModel);
+    workspace.Name = "Workspace";
+    const players = instance("Service", DataModel); players.Name="Players"; players.ClassName="Players";
+    const player = instance("Player", players); player.Name="LocalPlayer"; player.DisplayName="LocalPlayer";
+    const playerGui = instance("PlayerGui", player); playerGui.Name="PlayerGui";
+    const starterGui = instance("Service", DataModel); starterGui.Name="StarterGui"; starterGui.ClassName="StarterGui";
+    const replicatedStorage = instance("Service", DataModel); replicatedStorage.Name="ReplicatedStorage"; replicatedStorage.ClassName="ReplicatedStorage";
+    capture.services.Players=players; capture.services.Workspace=workspace; capture.services.StarterGui=starterGui; capture.services.ReplicatedStorage=replicatedStorage;
+    players.LocalPlayer=player; player.PlayerGui=playerGui;
+
+    const game = mutable({
+      Name:"game",
+      GetService(name){
+        const key=String(name||"");
+        if(capture.services[key]) return capture.services[key];
+        const svc=instance("Service",DataModel); svc.Name=key; svc.ClassName=key; capture.services[key]=svc;
+        this[key]=svc; return svc;
+      },
+      GetObjects(id){ return []; },
+      IsLoaded(){ return true; }
+    });
+    game.Workspace=workspace; game.Players=players;
+
+    const InstanceAPI = mutable({ new(className, parent){ return instance(className, parent || null); } });
+    const print = (...args) => { capture.stdout.push(args.map(v=>String(v)).join("\t")); };
+    const warn = (...args) => { capture.stderr.push(args.map(v=>String(v)).join("\t")); };
+    const errorFn = (...args) => { capture.stderr.push("error: "+args.map(v=>String(v)).join("\t")); };
+    const loader = source => {
+      const text=String(source ?? "");
+      if(text && text.length<=2000000 && !capture.dynamic.some(x=>x===text)) capture.dynamic.push(text);
+      return function(){ return null; };
+    };
+
+    const env = {
+      game, workspace, Instance: InstanceAPI,
+      print, warn, error: errorFn, loadstring: loader, load: loader,
+      require: id => mutable({Name:`Module:${String(id)}`, CreateWindow(){return instance("ScreenGui",playerGui);}, CreateButton(){return instance("TextButton",playerGui);}}),
+      task: mutable({spawn(fn){ if(typeof fn === "function") fn(); }, defer(fn){ if(typeof fn === "function") fn(); }, wait(){ return null; }, delay(t,fn){ if(typeof fn === "function") fn(); }}),
+      getgenv:()=>env, getfenv:()=>env, getrenv:()=>env
+    };
+    return { env, capture, DataModel, game, workspace };
+  }
+
+  async function probeWithRealLuau(source) {
+    try {
+      const mod = await loadRealLuauWeb();
+      if (!mod?.LuauState) throw new Error("LuauState export unavailable");
+      const envBundle = makeRealLuauRobloxEnv(mod.Mutable);
+      const state = await mod.LuauState.createAsync(envBundle.env);
+      const chunk = state.loadstring(String(source || ""), "QyrexDeobf", true);
+      if (typeof chunk !== "function") return { ok:false, error:String(chunk || "compile failed") };
+      await chunk();
+      return {
+        ok:true,
+        engine:"luau-web-1.4.0",
+        dynamicSources:envBundle.capture.dynamic.filter(x=>typeof x === "string" && !x.startsWith("-- [")),
+        stdout:envBundle.capture.stdout,
+        stderr:envBundle.capture.stderr,
+        environment:envBundle.env,
+        tree:envBundle.capture.instances.map((x,i)=>({id:i+1,name:x.Name,className:x.ClassName,parent:x.Parent?.Name||"nil"}))
+      };
+    } catch (error) {
+      return { ok:false, error:error?.message || String(error) };
+    }
   }
 
   async function deobfuscate() {
@@ -2699,7 +2906,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     $("btnRun").disabled = true;
     $("btnDeobf").disabled = true;
     $("btnStop").disabled = false;
-    setStatus("Analyzing...", "running");
+    setStatus("Deobfuscating...", "running");
     startClock();
 
     try {
@@ -2709,69 +2916,125 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 
       const a = analyzeLuraph(src);
       state.originalAnalysis = a;
-      state.cleaned = staticFallback(src, a);
+
+      // Pass 1: aggressive static reconstruction.
+      let best = staticFallback(src, a);
+      let bestScore = scoreRecoveredProgram(best);
+
+      // Pass 2: execute the wrapper ONLY inside the local Roblox-style sandbox.
+      // Any source handed to loadstring/load is captured instead of escaping to the browser.
+      let probeResult = await probeWithRealLuau(src);
+      if (!probeResult.ok) {
+        const probe = makeSafeRuntime();
+        probeResult = probe.run(src);
+        log(`Real Luau VM fallback: ${probeResult.ok === false ? (probeResult.error || "unavailable") : "local sandbox active"}`, "warn");
+      } else {
+        log("Real Luau VM: active · dynamic load payload capture enabled", "sys");
+      }
+      const dynamic = Array.isArray(probeResult.dynamicSources) ? probeResult.dynamicSources : [];
+
+      for (const chunk of dynamic.slice(0, 100)) {
+        if (state.controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
+        const candidateRaw = String(chunk?.source || '').trim();
+        if (!candidateRaw || candidateRaw.length > 2000000) continue;
+        const candidate = staticFallback(candidateRaw, a);
+        const sc = scoreRecoveredProgram(candidate);
+        if (sc > bestScore + 0.01 || (!best.trim() && candidate.trim())) {
+          best = candidate;
+          bestScore = sc;
+        }
+      }
+
+      // Pass 3: if the probe produced nested loaders, peel those too.
+      for (let pass = 0; pass < 16; pass++) {
+        const before = best;
+        const rt = makeSafeRuntime();
+        const rr = rt.run(best);
+        for (const chunk of (rr.dynamicSources || []).slice(0, 100)) {
+          const candidate = staticFallback(String(chunk.source || ''), a);
+          if (scoreRecoveredProgram(candidate) > bestScore + 0.01) {
+            best = candidate;
+            bestScore = scoreRecoveredProgram(candidate);
+          }
+        }
+        if (best === before || !rr.dynamicSources?.length) break;
+      }
+
       const normalizedOriginal = src.replace(/\s+/g, ' ').trim();
-      const normalizedCleaned = state.cleaned.replace(/\s+/g, ' ').trim();
-      const recovered = Boolean(normalizedCleaned && normalizedCleaned !== normalizedOriginal);
+      const normalizedBest = String(best || '').replace(/\s+/g, ' ').trim();
+      const recovered = Boolean(normalizedBest && normalizedBest !== normalizedOriginal && isLikelyFinalProgram(best));
+      state.cleaned = recovered ? best.trim() : (best.trim() || src);
       state.recovered = recovered;
-      const runtimeSource = recovered ? state.cleaned : src;
+
+      const runtimeSource = state.cleaned;
       const finalAnalysis = analyzeLuraph(runtimeSource);
       state.analysis = finalAnalysis;
+
+      // Final execution pass: only the recovered/final Luau enters the Roblox-style runtime.
       const rt = makeSafeRuntime();
       const runtimeResult = rt.run(runtimeSource);
       state.runtime = runtimeResult;
       state.calls = (runtimeResult.calls || []).map(c => ({...c, line: c.line || 0}));
-      state.engine = recovered ? "Qyrex Roblox Runtime · recovered source" : "Qyrex Roblox Runtime · source simulation";
+      state.engine = recovered
+        ? "QyrexDeobf Browser · reconstructed Luau → Roblox Runtime"
+        : "QyrexDeobf Browser · Roblox Runtime analysis";
+
       if (recovered) {
         setCode(state.cleaned);
-        log(`Recovered source: ${state.cleaned.length.toLocaleString()} characters`, "out");
+        log(`Recovered final Luau: ${state.cleaned.length.toLocaleString()} characters`, "out");
       }
+
       state.report = {
-        stdout: "",
-        stderr: "",
         elapsedMs: performance.now() - t0,
-        dumperPacks: [
-          "Recursive Base64 decoder (standard + URL-safe + nested)",
-          "Recursive XOR decoder (single-byte keys + discovered XOR operands)",
-          "Hex / numeric-byte / string.char constant recovery",
-          "25ms / FlameCoder / HookOp / Mimic / Larry / Zala static analyzers",
-          "Unveilr / Prometheus / IronBrew / MoonVeil / Luarmor / Junkie signatures",
-          "Calls + Environment static dump (library/service/global/file/network metadata)",
-          "Roblox Client Runtime Lab (Luau compiler + DataModel + Services + Instances + PlayerGui + Signals + Remotes + library shims)"
-        ],
         stdout: (runtimeResult.stdout || []).join("\n"),
         stderr: (runtimeResult.stderr || []).join("\n"),
+        dynamicChunks: dynamic.length,
         runtimeCalls: runtimeResult.calls?.length || 0,
-        runtimeSteps: runtimeResult.steps || 0
+        runtimeSteps: runtimeResult.steps || 0,
+        compiler: runtimeResult.compiled,
+        packs: [
+          "40-pass static reconstruction",
+          "Recursive Base64 / URL-safe Base64",
+          "XOR key discovery + byte loops",
+          "Hex / decimal / octal / string.char recovery",
+          "Constant folding + builder-loop recovery",
+          "loadstring/load dynamic payload capture",
+          "Roblox-style local DataModel runtime"
+        ]
       };
 
-      log(`Luau compile → Roblox runtime: ${runtimeSource.length.toLocaleString()} characters`, "out");
       log(`Loaded ${state.fileName} (${a.bytes.toLocaleString()} bytes)`, "sys");
-      log(`Provider: ${a.provider} → Runtime source: ${finalAnalysis.provider}`, "sys");
+      log(`Provider: ${a.provider} → Final: ${finalAnalysis.provider}`, "sys");
       log(`Final program: ${finalAnalysis.functions.toLocaleString()} functions · ${finalAnalysis.lines.toLocaleString()} lines`, "sys");
-      log(`VM/dumper markers: ${Number(a.dumpers?.vm?.count || 0).toLocaleString()}`, "sys");
-      log(`Strings: ${Number(a.dumpers?.strings?.count || 0).toLocaleString()} · decoded: ${Number(a.dumpers?.strings?.decoded?.length || 0).toLocaleString()}`, "out");
-      log(`Base64 candidates: ${Number(a.dumpers?.strings?.base64?.length || 0).toLocaleString()} · hex: ${Number(a.dumpers?.strings?.hex?.length || 0).toLocaleString()} · XOR: ${Number(a.dumpers?.strings?.xor?.length || 0).toLocaleString()}`, "out");
-      const layerInfo = staticFallback(src, a).split("\n").find(line => line.includes("Recursive decoders:")) || "";
-      if (layerInfo) log(layerInfo.replace(/^--\s*/, ""), "out");
-      log(`Runtime behaviors: ${Number(runtimeResult.calls?.length || 0).toLocaleString()} · types: ${(runtimeResult.programTypes || []).join(', ')}`, "out");
-      log(`Roblox Client Runtime: ${Number(runtimeResult.calls?.length || 0).toLocaleString()} calls · ${Number(runtimeResult.steps || 0).toLocaleString()} steps · stdout ${Number(runtimeResult.stdout?.length || 0).toLocaleString()}`, "out");
-      if (runtimeResult.stdout?.length) runtimeResult.stdout.slice(0,50).forEach(x => log(`[print] ${x}`, "out"));
-      if (runtimeResult.stderr?.length) runtimeResult.stderr.slice(0,50).forEach(x => log(`[warn/error] ${x}`, "warn"));
-      log(recovered ? "Deobfuscation finished: recovered code loaded into the editor." : "Deobfuscation finished: no additional static layer was recoverable.", recovered ? "out" : "warn");
+      log(`Captured dynamic chunks: ${dynamic.length.toLocaleString()}`, "out");
+      log(`Runtime behaviors: ${Number(runtimeResult.calls?.length || 0).toLocaleString()} · ${(runtimeResult.programTypes || []).join(', ')}`, "out");
+      if (runtimeResult.stdout?.length) runtimeResult.stdout.slice(0, 100).forEach(x => log(`[print] ${x}`, "out"));
+      if (runtimeResult.stderr?.length) runtimeResult.stderr.slice(0, 100).forEach(x => log(`[warn/error] ${x}`, "warn"));
+
+      if (recovered) {
+        log("Deobfuscation finished: final reconstructed code loaded into the editor.", "out");
+      } else {
+        log("No final static/dynamic payload was safely recoverable; original code was analyzed in the Roblox Runtime sandbox.", "warn");
+      }
+
       switchRight("output");
-      toast("QyrexDeobf", recovered ? "Código desofuscado cargado en el editor y enviado al Play Output." : "Código analizado y enviado al Play Output.");
-      setStatus(recovered ? "Deobfuscated" : "Completed", recovered ? "success" : "warn");
+      toast("QyrexDeobf", recovered
+        ? "Código final reconstruido y ejecutado en el Roblox Runtime local."
+        : "Código analizado dentro del Roblox Runtime local.");
+      setStatus(recovered ? "Deobfuscated" : "Analyzed", recovered ? "success" : "warn");
     } catch (error) {
       if (error?.name === "AbortError") {
         log("Processing stopped by user.", "warn");
         setStatus("Stopped", "warn");
       } else {
-        log(`Local analyzer failed: ${error?.message || error}`, "err");
-        state.cleaned = staticFallback(src, state.analysis || {});
-        state.engine = "browser-static-fallback";
+        console.error("[QyrexDeobf]", error);
+        log(`Local deobfuscator error: ${error?.message || error}`, "err");
+        const fallback = staticFallback(src, state.analysis || {});
+        state.cleaned = fallback || src;
+        state.recovered = Boolean(fallback && fallback.trim() !== src.trim());
+        try { if (state.recovered) setCode(state.cleaned); } catch (_) {}
         switchRight("output");
-        setStatus("Fallback", "warn");
+        setStatus("Error", "warn");
       }
     } finally {
       state.running = false;
@@ -2854,25 +3117,34 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     renderRight();
   }
 
-  function loadFile(file) {
+  async function loadFile(file) {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      state.fileName = file.name;
-      $("tabName").textContent = file.name;
-      setCode(String(reader.result || ""));
-      log(`Loaded ${file.name}`, "out");
-      switchRight("output");
-      toast("QyrexDeobf", `${file.name} cargado.`);
-    };
-    reader.onerror = () => log(`Could not read ${file.name}`, "err");
-    reader.readAsText(file);
+    try {
+      let text;
+      if (typeof file.text === "function") {
+        text = await file.text();
+      } else {
+        text = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result ?? ""));
+          reader.onerror = () => reject(reader.error || new Error("FileReader failed"));
+          reader.readAsText(file);
+        });
+      }
+      state.fileName = file.name || "untitled-obfuscated.lua";
+      $("tabName").textContent = state.fileName;
+      setCode(text);
+      log(`Loaded ${state.fileName} · ${text.length.toLocaleString()} characters`, "out");
+      toast("QyrexDeobf", `${state.fileName} cargado correctamente.`);
+    } catch (error) {
+      console.error("[QyrexDeobf] Browse error", error);
+      log(`No se pudo abrir el archivo: ${error?.message || error}`, "err");
+      toast("QyrexDeobf", "El navegador no pudo leer ese archivo.");
+    }
   }
 
-  $("btnNew").addEventListener("click", newFile);
-  $("btnNewTab").addEventListener("click", newFile);
   $("btnOpen").addEventListener("click", () => $("fileInput").click());
-  $("fileInput").addEventListener("change", e => loadFile(e.target.files?.[0]));
+  $("fileInput").addEventListener("change", e => { loadFile(e.target.files?.[0]); e.target.value = ""; });
   $("btnSave").addEventListener("click", saveSource);
   $("btnRun").addEventListener("click", deobfuscate);
   $("btnDeobf").addEventListener("click", deobfuscate);
@@ -2932,6 +3204,18 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 
   setCode("");
   renderRight();
+
+  window.addEventListener("error", event => {
+    const msg = event?.error?.message || event?.message || "Unknown browser error";
+    console.error("[QyrexDeobf browser]", event?.error || event);
+    if (state && !state.running) log(`Browser error: ${msg}`, "err");
+  });
+  window.addEventListener("unhandledrejection", event => {
+    const reason = event?.reason?.message || String(event?.reason || "Unhandled rejection");
+    console.error("[QyrexDeobf promise]", event?.reason);
+    if (state && !state.running) log(`Browser promise error: ${reason}`, "err");
+  });
+
 })();
 </script>
 </body>
