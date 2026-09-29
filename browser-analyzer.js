@@ -1,3 +1,4 @@
+
 (function () {
   'use strict';
 
@@ -223,6 +224,312 @@
       return {known:true,type:'string',value:String(vals[0].value)};
     }
     return { known: false };
+  }
+
+
+  function splitConcatTopLevel(text) {
+    const out = [];
+    let start = 0, depth = 0, quote = null, escape = false;
+    const s = String(text || '');
+    for (let i = 0; i < s.length - 1; i++) {
+      const ch = s[i];
+      if (quote) {
+        if (escape) { escape = false; continue; }
+        if (ch === '\\') { escape = true; continue; }
+        if (ch === quote) quote = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'") { quote = ch; continue; }
+      if ('([{'.includes(ch)) { depth++; continue; }
+      if (')]}'.includes(ch)) { depth = Math.max(0, depth - 1); continue; }
+      if (depth === 0 && ch === '.' && s[i + 1] === '.') {
+        out.push(s.slice(start, i).trim());
+        start = i + 2;
+        i++;
+      }
+    }
+    out.push(s.slice(start).trim());
+    return out.filter(Boolean);
+  }
+
+  function findMatchingParen(text, openIndex) {
+    const s = String(text || '');
+    if (s[openIndex] !== '(') return -1;
+    let depth = 0, quote = null, escape = false;
+    for (let i = openIndex; i < s.length; i++) {
+      const ch = s[i];
+      if (quote) {
+        if (escape) { escape = false; continue; }
+        if (ch === '\\') { escape = true; continue; }
+        if (ch === quote) quote = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'") { quote = ch; continue; }
+      if (ch === '(') depth++;
+      else if (ch === ')') {
+        depth--;
+        if (depth === 0) return i;
+      }
+    }
+    return -1;
+  }
+
+  function staticArrayLiteral(expr, env, depth = 0) {
+    if (depth > 8) return null;
+    const s = String(expr || '').trim();
+    if (!s.startsWith('{') || !s.endsWith('}')) return null;
+    const inner = s.slice(1, -1).trim();
+    if (!inner) return [];
+    const parts = splitTopLevel(inner);
+    const values = [];
+    for (const part of parts) {
+      const v = evalStaticExpr(part, env, depth + 1);
+      if (!v.known) return null;
+      values.push(v);
+    }
+    return values;
+  }
+
+  function evalStaticExpr(expr, env = Object.create(null), depth = 0) {
+    if (depth > 10) return { known:false };
+    let s = String(expr || '').trim();
+    if (!s) return { known:false };
+    while (s.startsWith('(') && s.endsWith(')') && findMatchingParen(s, 0) === s.length - 1) s = s.slice(1, -1).trim();
+
+    const concat = splitConcatTopLevel(s);
+    if (concat.length > 1) {
+      const vals = concat.map(x => evalStaticExpr(x, env, depth + 1));
+      if (vals.every(v => v.known && (v.type === 'string' || v.type === 'number'))) {
+        return { known:true, type:'string', value:vals.map(v => String(v.value)).join('') };
+      }
+    }
+
+    const q = unquoteLiteral(s);
+    if (q !== null) return { known:true, type:'string', value:q };
+    const n = parseNumber(s);
+    if (n !== null) return { known:true, type:'number', value:n };
+    if (s === 'true' || s === 'false') return { known:true, type:'boolean', value:s === 'true' };
+    if (s === 'nil') return { known:true, type:'nil', value:null };
+
+    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(s) && Object.prototype.hasOwnProperty.call(env, s)) return env[s];
+
+    const arr = staticArrayLiteral(s, env, depth + 1);
+    if (arr) return { known:true, type:'array', value:arr };
+
+    const callMatch = /^([A-Za-z_][A-Za-z0-9_.]*)\s*\(/.exec(s);
+    if (callMatch) {
+      const open = s.indexOf('(', callMatch[0].length - 1);
+      const close = findMatchingParen(s, open);
+      if (close === s.length - 1) {
+        const name = callMatch[1];
+        const val = evaluateCall(name === 'toString' ? 'tostring' : name, s.slice(open + 1, close), env);
+        if (val.known) return val;
+        if (name === 'table.unpack') {
+          const inner = staticArrayLiteral(s.slice(open + 1, close), env, depth + 1);
+          if (inner) return { known:true, type:'array', value:inner };
+        }
+      }
+    }
+
+    // Simple numeric arithmetic used by byte/character decoders.
+    const numeric = s.match(/^(.+?)\s*(<<|>>|[+%\-*/])\s*(.+)$/);
+    if (numeric && !/["']/.test(s)) {
+      const a = evalStaticExpr(numeric[1], env, depth + 1);
+      const b = evalStaticExpr(numeric[3], env, depth + 1);
+      if (a.known && b.known && a.type === 'number' && b.type === 'number') {
+        let v;
+        switch (numeric[2]) {
+          case '+': v = a.value + b.value; break;
+          case '-': v = a.value - b.value; break;
+          case '*': v = a.value * b.value; break;
+          case '/': v = b.value === 0 ? NaN : a.value / b.value; break;
+          case '%': v = b.value === 0 ? NaN : a.value % b.value; break;
+          case '<<': v = (a.value << b.value) >>> 0; break;
+          case '>>': v = a.value >> b.value; break;
+          default: v = NaN;
+        }
+        if (Number.isFinite(v)) return { known:true,type:'number',value:v };
+      }
+    }
+
+    // Indexed constant strings/tables: data[i] where i is statically known.
+    const idx = /^([A-Za-z_][A-Za-z0-9_]*)\s*\[\s*(\d+)\s*\]$/.exec(s);
+    if (idx && Object.prototype.hasOwnProperty.call(env, idx[1])) {
+      const base = env[idx[1]];
+      const i = Number(idx[2]) - 1;
+      if (base?.known && base.type === 'string') return {known:true,type:'number',value:base.value.charCodeAt(i)};
+      if (base?.known && base.type === 'array' && base.value[i]) return base.value[i];
+    }
+    return { known:false };
+  }
+
+  function foldStaticConstants(src) {
+    let out = String(src || '');
+    const env = Object.create(null);
+    for (let pass = 0; pass < 18; pass++) {
+      let changed = false;
+      const assignRe = /(?:^|[;\n])\s*(?:local\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^;\n]+)(?=;|\n|$)/g;
+      let m;
+      while ((m = assignRe.exec(out))) {
+        const name = m[1];
+        const rhs = m[2].trim();
+        const v = evalStaticExpr(rhs, env);
+        if (!v.known || v.type === 'nil') continue;
+        env[name] = v;
+        if (v.type === 'string' || v.type === 'number' || v.type === 'boolean') {
+          const rendered = v.type === 'string' ? luaStringEscape(v.value) : String(v.value);
+          if (rhs !== rendered && !/\b(?:game|workspace|Instance|Players|Enum)\b/.test(rhs)) {
+            const start = m.index + m[0].lastIndexOf(rhs);
+            out = out.slice(0, start) + rendered + out.slice(start + rhs.length);
+            changed = true;
+            break;
+          }
+        }
+      }
+      if (!changed) break;
+    }
+    return out;
+  }
+
+  function recoverStaticBuilderLoops(src) {
+    let out = String(src || '');
+    const constants = Object.create(null);
+    let m;
+    const simpleAssign = /(?:^|[;\n])\s*(?:local\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/g;
+    while ((m = simpleAssign.exec(out))) {
+      const v = unquoteLiteral(m[2]);
+      if (v !== null) constants[m[1]] = v;
+    }
+    const numberAssign = /(?:^|[;\n])\s*(?:local\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(0x[0-9a-fA-F]+|\d+)\b/g;
+    while ((m = numberAssign.exec(out))) constants[m[1]] = Number(m[2]);
+
+    const loopRe = /(?:local\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(""|'')\s*[;\n]\s*for\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*1\s*,\s*#([A-Za-z_][A-Za-z0-9_]*)\s+do([\s\S]*?)\bend\s*(?:;|\n)?/g;
+    let safety = 0;
+    while ((m = loopRe.exec(out)) && safety++ < 32) {
+      const outName = m[1], indexName = m[3], dataName = m[4], body = m[5];
+      const data = constants[dataName];
+      if (typeof data !== 'string' || !data.length) continue;
+      const append = new RegExp('(?:' + outName + '\\s*=\\s*' + outName + '\\s*\\.\\.\\s*)?string\\.char\\s*\\(\\s*([\\s\\S]*?)\\s*\\)', 'i').exec(body);
+      if (!append) continue;
+      const expr = append[1];
+      if (!new RegExp('string\\.byte\\s*\\(\\s*' + dataName + '\\s*,\\s*' + indexName, 'i').test(expr)) continue;
+
+      let key = null;
+      const keyMatch = expr.match(/(?:~|%|\+|-|\*)\s*(?:\(|\s)*([A-Za-z_][A-Za-z0-9_]*|0x[0-9a-fA-F]+|\d+)\s*\)?\s*$/i);
+      if (keyMatch) key = Object.prototype.hasOwnProperty.call(constants, keyMatch[1]) ? constants[keyMatch[1]] : Number(keyMatch[1]);
+      if (key == null || !Number.isFinite(Number(key))) continue;
+
+      const byteCall = new RegExp('string\\.byte\\s*\\(\\s*' + dataName + '\\s*,\\s*' + indexName + '\\s*\\)', 'i');
+      const built = [];
+      let ok = true;
+      for (let i = 1; i <= data.length; i++) {
+        const byte = data.charCodeAt(i - 1);
+        let value = byte;
+        const op = expr.match(new RegExp('string\\.byte\\s*\\(\\s*' + dataName + '\\s*,\\s*' + indexName + '\\s*\\)\\s*(~|%|\\+|-|\\*)\\s*(.+)$', 'i'));
+        if (op) {
+          const rhs = op[2].replace(/[()\s]+$/g, '').trim();
+          const k = Object.prototype.hasOwnProperty.call(constants, rhs) ? Number(constants[rhs]) : Number(rhs);
+          if (!Number.isFinite(k)) { ok = false; break; }
+          switch (op[1]) {
+            case '~': value = (byte ^ (k & 255)) & 255; break;
+            case '+': value = (byte + k) & 255; break;
+            case '-': value = (byte - k) & 255; break;
+            case '*': value = (byte * k) & 255; break;
+            case '%': value = k === 0 ? 0 : byte % k; break;
+          }
+        } else {
+          const bx = new RegExp('bit32\\.bxor\\s*\\(\\s*string\\.byte\\s*\\(\\s*' + dataName + '\\s*,\\s*' + indexName + '\\s*\\)\\s*,\\s*(.+?)\\s*\\)', 'i').exec(expr);
+          if (bx) {
+            const rhs = bx[1].trim();
+            const k = Object.prototype.hasOwnProperty.call(constants, rhs) ? Number(constants[rhs]) : Number(rhs);
+            if (!Number.isFinite(k)) { ok = false; break; }
+            value = (byte ^ (k & 255)) & 255;
+          } else {
+            ok = false; break;
+          }
+        }
+        built.push(String.fromCharCode(value));
+      }
+      if (!ok) continue;
+      const payload = built.join('');
+      if (!looksLikeLuaSource(payload) && !isStrongBase64(payload)) continue;
+
+      const fullStart = m.index;
+      const fullEnd = loopRe.lastIndex;
+      const after = out.slice(fullEnd);
+      const loader = new RegExp('^\\s*(?:loadstring|load)\\s*\\(\\s*' + outName + '\\s*\\)\\s*(?:\\(\\s*\\)\\s*\\))?','i').exec(after);
+      if (!loader) continue;
+      const replaceEnd = fullEnd + loader[0].length;
+      const rendered = luaStringEscape(payload);
+      out = out.slice(0, fullStart) + 'local ' + outName + ' = ' + rendered + '\n' + out.slice(replaceEnd);
+      loopRe.lastIndex = 0;
+    }
+    return out;
+  }
+
+
+  function extractBestDecodedProgram(src) {
+    const source = String(src || '');
+    let best = null;
+    const consider = (value, method) => {
+      const v = String(value || '').trim();
+      if (!looksLikeLuaSource(v) || v.length < 4) return;
+      const score = scoreLuaProgram(v);
+      if (!best || score > best.score || (score === best.score && v.length < best.source.length)) best = {source:v, score, method};
+    };
+    consider(source, 'source');
+    const keys = extractXorKeys(source);
+    for (const item of extractStrings(source)) {
+      const raw = String(item.decoded || '');
+      consider(raw, 'string');
+      const decoded = recursiveDecodeString(raw, keys, 20);
+      if (decoded?.changed) consider(decoded.value, 'recursive-string');
+    }
+    const tokens = source.match(/\b[A-Za-z0-9+/_-]{12,}={0,2}\b/g) || [];
+    for (const token of tokens.slice(0, 6000)) {
+      const decoded = recursiveDecodeString(token, keys, 20);
+      if (decoded?.changed) consider(decoded.value, 'recursive-token');
+    }
+    return best;
+  }
+
+  function recoverPayloadAfterBuilder(src) {
+    const built = recoverStaticBuilderLoops(String(src || ''));
+    if (built === String(src || '')) return null;
+    const strings = extractStrings(built);
+    const candidates = [];
+    for (const item of strings) {
+      const value = String(item.decoded || '').trim();
+      if (looksLikeLuaSource(value)) candidates.push(value);
+      const nested = recursiveDecodeString(value, extractXorKeys(built), 20);
+      if (nested?.changed && looksLikeLuaSource(nested.value)) candidates.push(nested.value.trim());
+    }
+    if (!candidates.length) return null;
+    candidates.sort((a,b) => scoreLuaProgram(b)-scoreLuaProgram(a));
+    return candidates[0];
+  }
+
+  function unwrapRecoveredLoaders(src) {
+    let out = String(src || '').trim();
+    for (let pass = 0; pass < 20; pass++) {
+      const before = out;
+      out = foldStaticConstants(out);
+      out = recoverStaticBuilderLoops(out);
+      out = foldPureCalls(out);
+      out = out.replace(/\b(?:loadstring|load)\s*\(\s*("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')\s*\)\s*(?:\(\s*\)\s*)?/gi, (full, raw) => {
+        const payload = unquoteLiteral(raw);
+        return payload !== null && looksLikeLuaSource(payload) ? payload : full;
+      });
+      out = out.replace(/\b(?:loadstring|load)\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)\s*(?:\(\s*\)\s*)?/gi, (full, name) => {
+        const re = new RegExp('(?:local\\s+)?' + name + '\\s*=\\s*("(?:\\\\.|[^"\\\\])*"|\'(?:\\\\.|[^\'\\\\])*\'|\\[=\\[[\\s\\S]*?\\]=\\])', 'i');
+        const m = re.exec(out);
+        if (!m) return full;
+        const payload = unquoteLiteral(m[1]);
+        return payload !== null && looksLikeLuaSource(payload) ? payload : full;
+      });
+      if (out === before) break;
+    }
+    return out;
   }
 
   function foldPureCalls(src) {
@@ -943,17 +1250,21 @@
     if (!src) return { source: '', recovered: false, method: 'empty' };
 
     // Prefer the argument of a loader when it can be statically recovered.
-    for (let pass = 0; pass < 8; pass++) {
+    for (let pass = 0; pass < 20; pass++) {
+      src = foldStaticConstants(src);
+      const builtPayload = recoverPayloadAfterBuilder(src);
+      if (builtPayload) return { source: builtPayload, recovered: true, method: 'static-builder-payload' };
+      src = recoverStaticBuilderLoops(src);
       const before = src;
       const loader = /\b(?:loadstring|load)\s*\(\s*([\s\S]*?)\s*\)\s*(?:\(\s*\))?/i.exec(src);
       if (loader) {
         const arg = loader[1].trim();
         const val = literalValue(arg, Object.create(null));
         if (val.known && val.type === 'string' && looksLikeLuaSource(val.value)) {
-          return { source: val.value.trim(), recovered: true, method: 'loader-literal' };
+          src = val.value.trim();
         } else {
           const q = unquoteLiteral(arg);
-          if (q !== null && looksLikeLuaSource(q)) return { source: q.trim(), recovered: true, method: 'loader-literal' };
+          if (q !== null && looksLikeLuaSource(q)) src = q.trim();
         }
       }
       src = foldPureCalls(src);
@@ -967,10 +1278,9 @@
     // return that payload instead of the wrapper/decoder scaffolding.
     const assignments = Object.create(null);
     let m;
-    const assignRe = /\b(?:local\s+)?([A-Za-z_]\w*)\s*=\s*((?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\[=+\[[\s\S]*?\]=+\]))/g;
+    const assignRe = /\b(?:local\s+)?([A-Za-z_]\w*)\s*=\s*("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\[=+\[[\s\S]*?\]=+\])/g;
     while ((m = assignRe.exec(src))) {
-      const rawValue = m[2];
-      const q = rawValue[0] === '[' ? parseLongBracket(rawValue) : unquoteLiteral(rawValue);
+      const q = m[2][0] === '[' ? parseLongBracket(m[2]) : unquoteLiteral(m[2]);
       if (q !== null) assignments[m[1]] = q;
     }
     const loaderRef = /\b(?:loadstring|load)\s*\(\s*([A-Za-z_]\w*)\s*\)/g;
@@ -1021,9 +1331,11 @@
       totalCustom++;
     }
 
-    // Multi-pass until stable: fold → recursive layers → known decoders.
-    for (let pass = 0; pass < 16; pass++) {
+    // Multi-pass until stable: constants → static builder loops → fold → recursive layers → known decoders.
+    for (let pass = 0; pass < 24; pass++) {
       const before = out;
+      out = foldStaticConstants(out);
+      out = recoverStaticBuilderLoops(out);
       const decodedLayers = decodeAllLayers(out);
       out = decodedLayers.source;
       totalLayers += decodedLayers.changedCount;
@@ -1032,6 +1344,11 @@
       out = custom.source;
       totalCustom += custom.changed;
       out = foldPureCalls(out);
+      const bestProgram = extractBestDecodedProgram(out);
+      if (bestProgram && bestProgram.score > scoreLuaProgram(out) + 0.12 && bestProgram.source !== out.trim()) {
+        out = bestProgram.source;
+        totalCustom++;
+      }
       if (out === before) break;
     }
     out = out.replace(/^\s*--\s*This file was protected using Luraph Obfuscator v[\d.]+.*$/gim, '');
@@ -1054,9 +1371,6 @@
     // Final payload extraction: remove decoder scaffolding and keep the program that Roblox would receive.
     const ultimate = extractUltimatePayload(out);
     out = ultimate.source || out || original || '';
-    // Repair a final-pass escaping artifact where a recovered Lua argument
-    // ends up as print("text\") instead of print("text").
-    out = out.replace(/([A-Za-z_]\w*\s*\(\s*["'])([^\n]*?)\\(["'])\s*\)/g, '$1$2$3)');
     return out.trimEnd() + '\n';
   }
 
@@ -1116,6 +1430,6 @@
 
   window.QyrexBrowserAnalyzer = {
     analyze, cleanSource, extractUltimatePayload, foldPureCalls, extractStrings, extractEncodedCandidates, decodeAllLayers, recursiveDecodeString,
-    identifyVMMarkers, detectProvider
+    identifyVMMarkers, detectProvider, foldStaticConstants, recoverStaticBuilderLoops, unwrapRecoveredLoaders, extractBestDecodedProgram
   };
 })();
