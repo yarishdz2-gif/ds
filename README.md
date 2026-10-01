@@ -1,26 +1,12 @@
-# QyrexDeobf v9 — GitHub Pages
+# QyrexDeobf v11 — GitHub Pages
 
-Build estático: solo `index.html`. No usa `server.js`, Node ni `/api`.
+Build estático para GitHub Pages. No usa server.js ni endpoints /api.
 
-## Motor de recuperación
+Motor de reconstrucción:
+- White Prometheus/VM/AST engine integrado desde el toolset suministrado.
+- Motor AST Qyrex.
+- Reconstrucción multicapa estática.
+- Captura estática de payloads load/loadstring.
+- Runtime Luau/Roblox local para analizar el resultado final.
 
-- reconstrucción recursiva por capas
-- Base64 / URL-safe Base64
-- Hex / bytes decimales / octal
-- `string.char` / `utf8.char` / concatenaciones constantes
-- XOR de una clave / candidatos XOR de un byte
-- builders y constantes estáticas
-- `loadstring` / `load` cuando el payload es recuperable sin ejecutar código arbitrario
-- Python wrappers comunes reducidos de forma estática
-- reconocimiento de proveedores/patrones: Luraph, Monsec, IronBrew, MoonVeil, Luarmor, Prometheus y 77fuscator
-- límite de entrada pensado para scripts grandes (hasta ~25 MB por sesión)
-
-## Browse
-
-El botón Browse usa `File.text()` con respaldo `FileReader`, por lo que funciona directamente en GitHub Pages.
-
-## Importante
-
-Un ofuscador VM personalizado no puede tener una recuperación universal de 100% con reglas genéricas: para cada VM real hay que conocer su bytecode, dispatcher, handlers y transformaciones. QyrexDeobf no ejecuta código arbitrario del archivo para “adivinar” una salida.
-
-El Runtime Roblox local se usa después de recuperar un programa Luau final y no sustituye al cliente real de Roblox.
+Importante: no existe un desofuscador universal que garantice recuperar cualquier VM/protector arbitrario. VM/protectores propietarios o con ejecución dinámica pueden requerir el algoritmo exacto del protector.
